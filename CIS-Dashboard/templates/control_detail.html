@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}{{ control_id }} — CIS Dashboard{% endblock %}
+{% block content %}
+<h1>{{ control_id }}</h1>
+{% if catalog %}
+  <p class="subtitle">{{ catalog.title }} — Capitulo {{ catalog.chapter }}
+    {% if catalog.profile_scope and catalog.profile_scope != 'All' %} — <strong>{{ catalog.profile_scope }}</strong>{% endif %}
+    {% if catalog.level %} — <span class="badge" style="background: {{ level_colors.get(catalog.level, '#999') }}">{{ catalog.level }}</span>{% endif %}
+  </p>
+{% elif history %}
+  <p class="subtitle">{{ history[0].title }}</p>
+{% endif %}
+
+<section>
+  <h2>Historial de resultados</h2>
+  {% if history %}
+  <table class="data-table">
+    <thead>
+      <tr><th>Servidor</th><th>Importada</th><th>Estado</th><th>Esperado</th><th>Actual</th><th>Notas</th></tr>
+    </thead>
+    <tbody>
+      {% for h in history %}
+      <tr>
+        <td>{{ h.hostname }}{% if not h.server_id %} <span class="small">(sin asignar)</span>{% endif %}</td>
+        <td>{{ h.imported_at }}</td>
+        <td><span class="badge" style="background:{{ status_colors.get(h.status, '#999') }}">{{ h.status }}</span></td>
+        <td class="mono">{{ h.expected_value }}</td>
+        <td class="mono">{{ h.actual_value }}</td>
+        <td>{{ h.notes }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+    <p class="empty-inline">Este control todavia no aparece en ninguna corrida importada.</p>
+  {% endif %}
+</section>
+
+<section>
+  <h2>Revisión manual</h2>
+  <p class="hint">
+    Es por servidor: el mismo control puede tener una decisión distinta en
+    cada servidor (ej. Print Spooler puede ser "RiskAccepted" en un servidor
+    de impresión y "Compliant" en cualquier otro). Queda guardado
+    independientemente de las corridas de auditoría, no se pisa al
+    reimportar CSVs nuevos.
+  </p>
+
+  {% if server %}
+    <p class="review-server-context">
+      Revisando para: <strong>{{ server.client_name }} / {{ server.name }}</strong>
+      — <a href="{{ url_for('control_detail', control_id=control_id) }}">cambiar de servidor</a>
+    </p>
+
+    {% if review %}
+      <p class="review-current">
+        Estado actual:
+        <span class="badge" style="background:{{ decision_colors.get(review.decision, '#999') }}">{{ review.decision }}</span>
+        — {{ review.reviewer or "sin revisor" }} — {{ review.updated_at }}
+      </p>
+    {% endif %}
+
+    <form method="post" class="review-form">
+      <input type="hidden" name="server_id" value="{{ server_id }}">
+      <label for="decision">Decisión</label>
+      <select name="decision" id="decision">
+        {% for d in decisions %}
+          <option value="{{ d }}" {% if review and review.decision == d %}selected{% endif %}>{{ d }}</option>
+        {% endfor %}
+      </select>
+
+      <label for="reviewer">Revisor</label>
+      <input type="text" name="reviewer" id="reviewer" placeholder="Nombre / usuario" value="{{ review.reviewer if review else '' }}">
+
+      <label for="evidence_notes">Notas / evidencia</label>
+      <textarea name="evidence_notes" id="evidence_notes" rows="4" placeholder="Por que se considera cumplido/no cumplido, referencia a ticket, captura, RSOP, etc.">{{ review.evidence_notes if review else '' }}</textarea>
+
+      <button class="btn" type="submit">Guardar revisión</button>
+    </form>
+  {% else %}
+    <form method="get" class="inline-form">
+      <label for="server_id">Elegí para qué servidor querés revisar este control:</label>
+      <select name="server_id" id="server_id" required>
+        <option value="">Elegí un servidor...</option>
+        {% for s in servers %}
+          <option value="{{ s.id }}">{{ s.client_name }} / {{ s.name }}</option>
+        {% endfor %}
+      </select>
+      <button class="btn btn-sm" type="submit">Continuar</button>
+    </form>
+    {% if not servers %}
+      <p class="empty-inline">Todavía no hay servidores creados —
+        <a href="{{ url_for('clients_list') }}">creá uno primero</a>.</p>
+    {% endif %}
+  {% endif %}
+</section>
+{% endblock %}

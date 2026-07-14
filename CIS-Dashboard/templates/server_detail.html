@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}{{ server.name }} — CIS Dashboard{% endblock %}
+{% block content %}
+<h1>{{ server.name }}</h1>
+<p class="subtitle">
+  <a href="{{ url_for('client_detail', client_id=server.client_id) }}">{{ server.client_name }}</a>
+  <span class="badge" style="background:{{ criticality_colors.get(server.criticality, '#999') }}">{{ server.criticality }}</span>
+  {% if server.hostname %} — <span class="mono">{{ server.hostname }}</span>{% endif %}
+</p>
+{% if server.description %}<p class="hint">{{ server.description }}</p>{% endif %}
+
+<h2>Historial de corridas ({{ runs|length }})</h2>
+{% if runs %}
+<table class="data-table">
+  <thead>
+    <tr><th>Importada</th><th>Etiqueta</th><th>Total</th><th>Fail</th><th>Pass</th><th>Manual</th><th></th></tr>
+  </thead>
+  <tbody>
+    {% for r in runs %}
+    <tr>
+      <td>{{ r.imported_at }}</td>
+      <td>{{ r.label or "—" }}</td>
+      <td>{{ r.total }}</td>
+      <td>{{ r.n_fail }}</td>
+      <td>{{ r.n_pass }}</td>
+      <td>{{ r.n_manual }}</td>
+      <td><a class="btn btn-sm" href="{{ url_for('run_detail', run_id=r.id) }}">Ver</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+  <p class="empty-inline">Todavía no se importó ninguna corrida para este servidor.
+    <a href="{{ url_for('import_csv') }}">Importar una ahora</a></p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}{{ run.hostname }} — CIS Dashboard{% endblock %}
+{% block content %}
+<h1>{{ run.hostname }}</h1>
+{% if run.server_id %}
+  <p class="subtitle">
+    <a href="{{ url_for('client_detail', client_id=run.client_id) if run.client_id else '#' }}">{{ run.client_name }}</a>
+    / <a href="{{ url_for('server_detail', server_id=run.server_id) }}">{{ run.server_name }}</a>
+    — Importada {{ run.imported_at }}{% if run.label %} — {{ run.label }}{% endif %} — {{ counts.Total }} controles
+  </p>
+{% else %}
+  <p class="subtitle">Importada {{ run.imported_at }}{% if run.label %} — {{ run.label }}{% endif %} — {{ counts.Total }} controles</p>
+  <div class="flash flash-error">
+    <strong>Esta corrida no está asignada a ningún servidor.</strong> Sin
+    asignarla no se puede hacer revisión manual por control (esas decisiones
+    ahora son por servidor). Asignala acá:
+    <form method="post" action="{{ url_for('assign_run_server', run_id=run.id) }}" class="inline-form">
+      <select name="server_id" required>
+        <option value="">Elegí un servidor...</option>
+        {% for group in clients_tree %}
+          <optgroup label="{{ group.client.name }}">
+            {% for s in group.servers %}
+              <option value="{{ s.id }}">{{ s.name }}</option>
+            {% endfor %}
+          </optgroup>
+        {% endfor %}
+      </select>
+      <button class="btn btn-sm" type="submit">Asignar</button>
+    </form>
+    {% if not clients_tree %}<p class="hint">Todavía no hay servidores creados — <a href="{{ url_for('clients_list') }}">creá uno primero</a>.</p>{% endif %}
+  </div>
+{% endif %}
+
+<form method="get" class="filters">
+  <input type="text" name="q" placeholder="Buscar control_id o titulo..." value="{{ search }}">
+  <select name="status">
+    <option value="">Todos los estados</option>
+    {% for s in ["Fail", "ManualReviewRequired", "Error", "NotApplicable", "Pass"] %}
+      <option value="{{ s }}" {% if status_filter == s %}selected{% endif %}>{{ s }}</option>
+    {% endfor %}
+  </select>
+  <select name="chapter">
+    <option value="">Todos los capitulos</option>
+    {% for ch in chapters %}
+      <option value="{{ ch }}" {% if chapter_filter == ch %}selected{% endif %}>{{ ch }}</option>
+    {% endfor %}
+  </select>
+  <select name="level">
+    <option value="">Todos los niveles</option>
+    {% for lv in levels %}
+      <option value="{{ lv }}" {% if level_filter == lv %}selected{% endif %}>{{ lv }}</option>
+    {% endfor %}
+  </select>
+  <button class="btn" type="submit">Filtrar</button>
+  <a class="btn btn-ghost" href="{{ url_for('run_detail', run_id=run.id) }}">Limpiar</a>
+</form>
+
+<table class="data-table">
+  <thead>
+    <tr><th>Cap.</th><th>Control</th><th>Titulo</th><th>Nivel</th><th>Estado</th><th>Esperado</th><th>Actual</th></tr>
+  </thead>
+  <tbody>
+    {% for r in results %}
+    <tr>
+      <td>{{ r.chapter }}</td>
+      <td><a href="{{ url_for('control_detail', control_id=r.control_id, server_id=run.server_id) }}">{{ r.control_id }}</a></td>
+      <td>{{ r.title }}</td>
+      <td class="small">{{ r.level or "—" }}</td>
+      <td><span class="badge" style="background:{{ status_colors.get(r.status, '#999') }}">{{ r.status }}</span></td>
+      <td class="mono">{{ r.expected_value }}</td>
+      <td class="mono">{{ r.actual_value }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% if not results %}<p class="empty-inline">Ningun control coincide con el filtro.</p>{% endif %}
+{% endblock %}

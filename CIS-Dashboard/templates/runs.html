@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Corridas — CIS Dashboard{% endblock %}
+{% block content %}
+<h1>Corridas importadas</h1>
+
+{% if not runs %}
+  <p class="empty-inline">Todavia no importaste ninguna corrida.
+    <a href="{{ url_for('import_csv') }}">Importar CSV</a></p>
+{% else %}
+<table class="data-table">
+  <thead>
+    <tr><th>Cliente / Servidor</th><th>Hostname CSV</th><th>Importada</th><th>Etiqueta</th><th>Total</th><th>Fail</th><th>Pass</th><th>Manual</th><th></th></tr>
+  </thead>
+  <tbody>
+    {% for r in runs %}
+    <tr>
+      <td>
+        {% if r.server_id %}
+          {{ r.client_name }} / <a href="{{ url_for('server_detail', server_id=r.server_id) }}">{{ r.server_name }}</a>
+        {% else %}
+          <span class="small">Sin asignar</span>
+        {% endif %}
+      </td>
+      <td class="mono small">{{ r.hostname }}</td>
+      <td>{{ r.imported_at }}</td>
+      <td>{{ r.label or "—" }}</td>
+      <td>{{ r.total }}</td>
+      <td>{{ r.n_fail }}</td>
+      <td>{{ r.n_pass }}</td>
+      <td>{{ r.n_manual }}</td>
+      <td><a class="btn btn-sm" href="{{ url_for('run_detail', run_id=r.id) }}">Ver</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

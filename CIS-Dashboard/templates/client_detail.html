@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}{{ client.name }} — CIS Dashboard{% endblock %}
+{% block content %}
+<h1>{{ client.name }}</h1>
+{% if client.description %}<p class="subtitle">{{ client.description }}</p>{% endif %}
+
+<h2>Servidores</h2>
+{% if servers %}
+<table class="data-table">
+  <thead>
+    <tr><th>Servidor</th><th>Hostname</th><th>Criticidad</th><th>Última corrida</th><th>Fail</th><th>Manual</th><th></th></tr>
+  </thead>
+  <tbody>
+    {% for s in servers %}
+    {% set summary = server_summaries.get(s.id) %}
+    <tr>
+      <td><a href="{{ url_for('server_detail', server_id=s.id) }}">{{ s.name }}</a></td>
+      <td class="mono small">{{ s.hostname or "—" }}</td>
+      <td><span class="badge" style="background:{{ criticality_colors.get(s.criticality, '#999') }}">{{ s.criticality }}</span></td>
+      {% if summary %}
+        <td class="small">{{ summary.run.imported_at }}</td>
+        <td>{{ summary.counts.Fail }}</td>
+        <td>{{ summary.counts.ManualReviewRequired }}</td>
+      {% else %}
+        <td class="small" colspan="3">Sin corridas importadas todavía</td>
+      {% endif %}
+      <td><a class="btn btn-sm" href="{{ url_for('server_detail', server_id=s.id) }}">Ver</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+  <p class="empty-inline">Este cliente todavía no tiene servidores cargados.</p>
+{% endif %}
+
+<h2>Agregar servidor</h2>
+<form method="post" class="review-form">
+  <label for="name">Nombre</label>
+  <input type="text" name="name" id="name" placeholder="ej. DC01 - Controlador de Dominio Primario" required>
+
+  <label for="hostname">Hostname (opcional, orientativo)</label>
+  <input type="text" name="hostname" id="hostname" placeholder="ej. DC01">
+
+  <label for="criticality">Criticidad</label>
+  <select name="criticality" id="criticality">
+    {% for lvl in criticality_levels %}
+      <option value="{{ lvl }}" {% if lvl == "Medium" %}selected{% endif %}>{{ lvl }}</option>
+    {% endfor %}
+  </select>
+
+  <label for="description">Descripción (opcional)</label>
+  <textarea name="description" id="description" rows="2" placeholder="Rol del servidor, ubicación, notas..."></textarea>
+
+  <button class="btn" type="submit">Agregar servidor</button>
+</form>
+{% endblock %}

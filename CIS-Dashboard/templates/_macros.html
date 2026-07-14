@@ -1,0 +1,37 @@
+{% macro coverage_row(title, subtitle, counts, hint=None) %}
+{% set total = counts.Fail + counts.ManualReviewRequired + counts.Error + counts.NotApplicable + counts.Pass %}
+<div class="cov-row">
+  <div class="cov-header">
+    <div>
+      <span class="cov-title">{{ title }}</span>
+      {% if subtitle %}<span class="cov-sub">{{ subtitle }}</span>{% endif %}
+    </div>
+    {% if total > 0 %}
+      <span class="cov-fail-pct {% if counts.Fail == 0 %}cov-fail-pct-zero{% endif %}">
+        {{ (counts.Fail / total * 100) | round(0, 'floor') | int }}% Fail
+      </span>
+    {% endif %}
+  </div>
+
+  <div class="cov-bar">
+    {% if total > 0 %}
+      {% if counts.Fail %}<span class="seg fail" style="width:{{ (counts.Fail / total * 100) | round(2) }}%" title="Fail: {{ counts.Fail }}"></span>{% endif %}
+      {% if counts.ManualReviewRequired %}<span class="seg manual" style="width:{{ (counts.ManualReviewRequired / total * 100) | round(2) }}%" title="Manual Review: {{ counts.ManualReviewRequired }}"></span>{% endif %}
+      {% if counts.Error %}<span class="seg error" style="width:{{ (counts.Error / total * 100) | round(2) }}%" title="Error: {{ counts.Error }}"></span>{% endif %}
+      {% if counts.NotApplicable %}<span class="seg na" style="width:{{ (counts.NotApplicable / total * 100) | round(2) }}%" title="Not Applicable: {{ counts.NotApplicable }}"></span>{% endif %}
+      {% if counts.Pass %}<span class="seg pass" style="width:{{ (counts.Pass / total * 100) | round(2) }}%" title="Pass: {{ counts.Pass }}"></span>{% endif %}
+    {% endif %}
+  </div>
+
+  <div class="cov-stats">
+    {% if counts.Fail %}<span class="stat-chip fail">{{ counts.Fail }} Fail</span>{% endif %}
+    {% if counts.ManualReviewRequired %}<span class="stat-chip manual">{{ counts.ManualReviewRequired }} Manual</span>{% endif %}
+    {% if counts.Error %}<span class="stat-chip error">{{ counts.Error }} Error</span>{% endif %}
+    {% if counts.NotApplicable %}<span class="stat-chip na">{{ counts.NotApplicable }} N/A</span>{% endif %}
+    {% if counts.Pass %}<span class="stat-chip pass">{{ counts.Pass }} Pass</span>{% endif %}
+    <span class="cov-total">{{ total }} controles</span>
+  </div>
+
+  {% if hint %}<p class="cov-hint">{{ hint }}</p>{% endif %}
+</div>
+{% endmacro %}

@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Revision manual — CIS Dashboard{% endblock %}
+{% block content %}
+<h1>Cola de revisión manual</h1>
+<p class="subtitle">Controles marcados <code>ManualReviewRequired</code> en la última corrida de cada servidor — no tienen remediación automática, alguien tiene que revisarlos a mano. La decisión es por servidor.</p>
+
+{% if has_unassigned %}
+  <div class="flash flash-error">
+    Hay corridas importadas sin servidor asignado — sus controles manuales no
+    aparecen acá hasta que las asignes desde <a href="{{ url_for('runs_list') }}">Corridas</a>.
+  </div>
+{% endif %}
+
+<form method="get" class="filters">
+  <select name="server_id">
+    <option value="">Todos los servidores</option>
+    {% for sid, label in servers %}
+      <option value="{{ sid }}" {% if server_filter == sid %}selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
+  <select name="decision">
+    <option value="">Todas las decisiones</option>
+    {% for d in decisions %}
+      <option value="{{ d }}" {% if decision_filter == d %}selected{% endif %}>{{ d }}</option>
+    {% endfor %}
+  </select>
+  <select name="chapter">
+    <option value="">Todos los capitulos</option>
+    {% for ch in chapters %}
+      <option value="{{ ch }}" {% if chapter_filter == ch %}selected{% endif %}>{{ ch }}</option>
+    {% endfor %}
+  </select>
+  <button class="btn" type="submit">Filtrar</button>
+  <a class="btn btn-ghost" href="{{ url_for('manual_review_queue') }}">Limpiar</a>
+</form>
+
+{% if items %}
+<table class="data-table">
+  <thead>
+    <tr><th>Servidor</th><th>Cap.</th><th>Control</th><th>Titulo</th><th>Motivo</th><th>Decision</th><th>Revisor</th><th>Actualizado</th><th></th></tr>
+  </thead>
+  <tbody>
+    {% for it in items %}
+    <tr>
+      <td class="small">{{ it.server_label }}</td>
+      <td>{{ it.chapter }}</td>
+      <td><a href="{{ url_for('control_detail', control_id=it.control_id, server_id=it.server_id) }}">{{ it.control_id }}</a></td>
+      <td>{{ it.title }}</td>
+      <td class="small">{{ it.notes }}</td>
+      <td><span class="badge" style="background:{{ decision_colors.get(it.decision, '#999') }}">{{ it.decision }}</span></td>
+      <td>{{ it.reviewer or "—" }}</td>
+      <td>{{ it.updated_at or "—" }}</td>
+      <td><a class="btn btn-sm" href="{{ url_for('control_detail', control_id=it.control_id, server_id=it.server_id) }}">Revisar</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+  <p class="empty-inline">No hay controles de revisión manual con este filtro (o todavía no importaste ninguna corrida asignada a un servidor).</p>
+{% endif %}
+{% endblock %}

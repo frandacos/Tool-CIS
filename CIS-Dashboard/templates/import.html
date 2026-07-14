@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Importar — CIS Dashboard{% endblock %}
+{% block content %}
+<h1>Importar CSV</h1>
+
+<div class="import-help">
+  <p>Esta pantalla acepta dos tipos de archivo (se detectan solos por las columnas):</p>
+  <ul>
+    <li><strong>Catalogo de controles</strong> — <code>Tool-CIS/inventory/cis2025_controls_master.csv</code>.
+      Importalo primero (o cuando cambie): le da titulo/capitulo/nivel a cada control_id en toda
+      la app. No necesita cliente/servidor, es global.</li>
+    <li><strong>Corrida de auditoria</strong> — el CSV que exporta
+      <code>Invoke-CISAudit -OutputPath archivo.csv</code> en CISHarden, desde el servidor
+      auditado. <strong>Tenés que elegir a qué servidor pertenece</strong> antes de subirla —
+      es lo que permite la trazabilidad por cliente/servidor. Cada importación crea una
+      corrida nueva (no pisa las anteriores).</li>
+  </ul>
+  {% if not clients_tree %}
+    <p class="hint">Todavía no creaste ningún cliente/servidor —
+      <a href="{{ url_for('clients_list') }}">creá uno primero</a> si vas a importar una corrida
+      de auditoría (el catálogo se puede importar igual, no lo necesita).</p>
+  {% endif %}
+</div>
+
+<form method="post" enctype="multipart/form-data" class="import-form">
+  <label for="file">Archivo CSV</label>
+  <input type="file" name="file" id="file" accept=".csv" required>
+
+  <label for="server_id">Servidor (solo para corridas de auditoría)</label>
+  <select name="server_id" id="server_id">
+    <option value="">— No aplica / es el catálogo —</option>
+    {% for group in clients_tree %}
+      <optgroup label="{{ group.client.name }}">
+        {% for s in group.servers %}
+          <option value="{{ s.id }}">{{ s.name }}{% if s.hostname %} ({{ s.hostname }}){% endif %}</option>
+        {% endfor %}
+      </optgroup>
+    {% endfor %}
+  </select>
+
+  <label for="label">Etiqueta (opcional, solo aplica a corridas de auditoría)</label>
+  <input type="text" name="label" id="label" placeholder="ej. post-Etapa-18d, pre-remediacion...">
+
+  <button class="btn" type="submit">Importar</button>
+</form>
+{% endblock %}

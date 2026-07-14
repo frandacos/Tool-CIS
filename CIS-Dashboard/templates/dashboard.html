@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block title %}Dashboard — CIS Dashboard{% endblock %}
+{% block content %}
+
+{% if not grouped_runs and not unassigned_runs %}
+  <div class="empty-state">
+    <h2>Todavia no importaste nada</h2>
+    <p>Primero creá un <a href="{{ url_for('clients_list') }}">cliente y sus servidores</a>,
+      importá el catálogo de controles
+      (<code>inventory/cis2025_controls_master.csv</code>) y al menos una
+      corrida de auditoria (el CSV que exporta
+      <code>Invoke-CISAudit -OutputPath</code> en CISHarden).</p>
+    <a class="btn" href="{{ url_for('import_csv') }}">Importar CSV</a>
+  </div>
+{% else %}
+
+  <form method="get" class="run-picker">
+    <label for="run_id">Servidor / corrida:</label>
+    <select name="run_id" id="run_id" onchange="this.form.submit()">
+      {% for client_name, runs in grouped_runs %}
+        <optgroup label="{{ client_name }}">
+          {% for r in runs %}
+            <option value="{{ r.id }}" {% if selected_run and r.id == selected_run.id %}selected{% endif %}>
+              {{ r.server_name }} — {{ r.imported_at }}{% if r.label %} ({{ r.label }}){% endif %}
+            </option>
+          {% endfor %}
+        </optgroup>
+      {% endfor %}
+      {% if unassigned_runs %}
+        <optgroup label="Sin cliente asignado">
+          {% for r in unassigned_runs %}
+            <option value="{{ r.id }}" {% if selected_run and r.id == selected_run.id %}selected{% endif %}>
+              {{ r.hostname }} — {{ r.imported_at }}{% if r.label %} ({{ r.label }}){% endif %}
+            </option>
+          {% endfor %}
+        </optgroup>
+      {% endif %}
+    </select>
+    <a href="{{ url_for('runs_list') }}">ver todas las corridas &rarr;</a>
+  </form>
+
+  {% if selected_run and not selected_run.server_id %}
+    <div class="flash flash-error">
+      Esta corrida no está asignada a ningún servidor todavía (no se puede
+      revisar manualmente hasta asignarla).
+      <a href="{{ url_for('run_detail', run_id=selected_run.id) }}">Asignarla a un servidor &rarr;</a>
+    </div>
+  {% endif %}
+
+  {% if catalog_count == 0 %}
+    <div class="flash flash-error">
+      <strong>No importaste el catálogo de controles todavía.</strong> Por eso
+      "Cobertura por capítulo" y "Por nivel de riesgo" muestran todo junto en
+      una sola fila ("? · Sección ?" / "Sin clasificar") — sin el catálogo, la
+      app no sabe a qué capítulo ni nivel pertenece cada <code>control_id</code>.
+      Importá <code>inventory/cis2025_controls_master.csv</code> desde
+      <a href="{{ url_for('import_csv') }}">Importar</a> para arreglarlo.
+    </div>
+  {% endif %}
+
+  {% if selected_run %}
+    <section class="cards">
+      <div class="card total">
+        <div class="card-value">{{ counts.Total }}</div>
+        <div class="card-label">Total controles</div>
+      </div>
+      <div class="card" style="border-top-color: {{ status_colors.Fail }}">
+        <div class="card-value">{{ counts.Fail }}</div>
+        <div class="card-label">Fail</div>
+      </div>
+      <div class="card" style="border-top-color: {{ status_colors.ManualReviewRequired }}">
+        <div class="card-value">{{ counts.ManualReviewRequired }}</div>
+        <div class="card-label">Manual Review</div>
+        {% if manual_pending %}<div class="card-sub">{{ manual_pending }} sin decidir</div>{% endif %}
+      </div>
+      <div class="card" style="border-top-color: {{ status_colors.NotApplicable }}">
+        <div class="card-value">{{ counts.NotApplicable }}</div>
+        <div class="card-label">Not Applicable</div>
+      </div>
+      <div class="card" style="border-top-color: {{ status_colors.Pass }}">
+        <div class="card-value">{{ counts.Pass }}</div>
+        <div class="card-label">Pass</div>
+      </div>
+      {% if counts.Error %}
+      <div class="card" style="border-top-color: {{ status_colors.Error }}">
+        <div class="card-value">{{ counts.Error }}</div>
+        <div class="card-label">Error</div>
+      </div>
+      {% endif %}
+    </section>
+
+    <section>
+      <div class="section-head">
+        <h2>Cobertura por capítulo</h2>
+        <p class="hint">Ordenado por número de capítulo. El % de la derecha es la
+          proporción en <span class="inline-fail">Fail</span> — la señal más
+          rápida de por dónde priorizar.</p>
+      </div>
+      {% for chapter, s in chapters %}
+        {{ m.coverage_row(
+          chapter ~ " · " ~ chapter_titles.get(chapter, "Sección " ~ chapter),
+          None,
+          s
+        ) }}
+      {% endfor %}
+    </section>
+
+    <section>
+      <div class="section-head">
+        <h2>Por nivel de riesgo</h2>
+        <p class="hint">
+          <strong>Level 2</strong> es "defense in depth": el propio benchmark
+          advierte que puede afectar funcionalidad. Priorizá remediar
+          <strong>Level 1</strong> primero y revisá Level 2 con más cuidado
+          antes de aplicarlo en masa
+          (<code>Invoke-CISRemediate -Level 'Level 1'</code> en CISHarden).
+        </p>
+      </div>
+      {% for level, s in levels %}
+        {{ m.coverage_row(level, None, s, level_hints.get(level)) }}
+      {% endfor %}
+    </section>
+
+    <section>
+      <h2>Controles en Fail ({{ fail_controls|length }})</h2>
+      {% if fail_controls %}
+      <table class="data-table">
+        <thead>
+          <tr><th>Cap.</th><th>Control</th><th>Titulo</th><th>Nivel</th><th>Esperado</th><th>Actual</th></tr>
+        </thead>
+        <tbody>
+          {% for c in fail_controls %}
+          <tr>
+            <td>{{ c.chapter }}</td>
+            <td><a href="{{ url_for('control_detail', control_id=c.control_id, server_id=selected_run.server_id) }}">{{ c.control_id }}</a></td>
+            <td>{{ c.title }}</td>
+            <td class="small">{{ c.level or "—" }}</td>
+            <td class="mono">{{ c.expected_value }}</td>
+            <td class="mono">{{ c.actual_value }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+        <p class="empty-inline">Ningun control en Fail en esta corrida. 🎉</p>
+      {% endif %}
+    </section>
+  {% endif %}
+{% endif %}
+{% endblock %}
