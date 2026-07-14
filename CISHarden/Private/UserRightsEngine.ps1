@@ -96,7 +96,13 @@ function Test-CISUserRight {
     )
 
     $rights = Get-CISPrivilegeRights
-    $actualSids = @($rights[$RightConstant])
+    # @($rights[$RightConstant]) por si solo: si el right no aparece en el
+    # export de secedit (caso 'No One', que es el estado deseado en varios
+    # controles), $rights[$RightConstant] es $null y @($null) da un array de
+    # UN elemento null (.Count = 1), no un array vacio. Sin este filtro,
+    # todos los controles 'No One' correctamente configurados se marcaban
+    # Fail. Filtrar $null es lo que corrige el .Count real a 0.
+    $actualSids = @(@($rights[$RightConstant]) | Where-Object { $_ })
 
     if ($ExpectedPrincipals.Count -eq 0) {
         # Caso 'No One': el right no debe tener ningun principal asignado.
@@ -140,7 +146,8 @@ function Set-CISUserRight {
     )
 
     $rights = Get-CISPrivilegeRights
-    $actualSids = @($rights[$RightConstant])
+    # Mismo filtro de $null que en Test-CISUserRight (ver comentario ahi).
+    $actualSids = @(@($rights[$RightConstant]) | Where-Object { $_ })
 
     $expectedSids = @()
     foreach ($p in $ExpectedPrincipals) {

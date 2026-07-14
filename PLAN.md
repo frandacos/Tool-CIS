@@ -79,6 +79,22 @@ Se divide en 2 sub-etapas por volumen:
   `CISHarden/Tests/Chapter2-UserRights.Tests.ps1`. Pendiente correr Pester y
   validar en server de lab (`status_impl=OK`, falta `status_tested`/
   `status_validated`).
+
+  > **Bug encontrado auditando un DC real (2026-07-14):** todos los
+  > controles con valor esperado `'No One'` (2.2.1, 2.2.4, 2.2.14, 2.2.16,
+  > 2.2.35, 2.2.39, 2.2.47) daban `Fail` con `ActualValue` vacío -- es decir,
+  > el right realmente no tenía a nadie asignado (estado correcto) pero el
+  > audit lo marcaba mal. Causa: `@($rights[$RightConstant])` sobre una clave
+  > ausente del hashtable produce `@($null)`, que en PowerShell tiene
+  > `.Count = 1`, no `0`. Corregido en `UserRightsEngine.ps1` filtrando
+  > `$null` antes de contar (`Test-CISUserRight` y `Set-CISUserRight`). Los
+  > mocks originales de Pester no lo detectaban porque simulaban el caso
+  > vacío como `@{ SeTcbPrivilege = @() }` (array explícito) en vez de la
+  > clave ausente (lo que realmente hace `secedit` cuando nadie tiene el
+  > right) -- se agregó un test de regresión específico para ese escenario.
+  > Lección: los mocks tienen que reproducir la forma exacta en que la
+  > herramienta real (`secedit`) devuelve el caso límite, no solo el
+  > resultado lógico esperado.
 - 2b. Security Options (70) — pendiente. Mezcla de `secedit`
   (`[System Access]` / `[Registry Values]`), registro directo (`HKLM:\...`)
   y algunas GPO puras. Incluye el segundo control Manual del benchmark:

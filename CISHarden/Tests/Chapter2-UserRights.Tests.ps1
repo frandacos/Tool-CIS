@@ -55,9 +55,21 @@ Describe 'Chapter 2.2 - User Rights Assignment' {
         }
 
         Context 'Caso "No One" (2.2.4 Act as part of the operating system)' {
-            It 'Pass cuando el right esta vacio' {
+            It 'Pass cuando el right esta vacio (array explicito)' {
                 Mock Get-CISServerRole { 'MS' }
                 Mock Get-CISPrivilegeRights { @{ SeTcbPrivilege = @() } }
+                (Test-CIS_2_2_4).Status | Should -Be 'Pass'
+            }
+            It 'Pass cuando el right NO aparece en el export de secedit (regresion del bug @($null))' {
+                # Este es el caso real: secedit no emite una linea para un right
+                # sin nadie asignado, asi que la clave ni existe en el hashtable
+                # (a diferencia del test de arriba, que fuerza @() explicito).
+                # @($null) tiene Count=1 en PowerShell, no 0 -- este test
+                # reproduce el bug encontrado auditando un DC real (SeTcbPrivilege,
+                # SeCreateTokenPrivilege, etc. daban Fail estando correctamente
+                # vacios).
+                Mock Get-CISServerRole { 'MS' }
+                Mock Get-CISPrivilegeRights { @{} }
                 (Test-CIS_2_2_4).Status | Should -Be 'Pass'
             }
             It 'Fail cuando el right tiene algun principal asignado' {
