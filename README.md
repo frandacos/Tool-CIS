@@ -77,19 +77,43 @@ $resultado | Group-Object Status | Select Name, Count
 
 ## Remediar (hace cambios reales en el servidor)
 
-**No lo corras contra los 454 de una sin revisar antes.** Andá capítulo por
-capítulo, revisando qué va a cambiar:
+`Invoke-CISRemediate` tiene 5 niveles de alcance. **Siempre exige uno
+explícito** (`-ControlId`, `-ControlIds`, `-Section`, `-Chapter` o `-All`) —
+si no pasás ninguno, tira error en vez de asumir "remediar todo", para que
+nunca se dispare una remediación masiva sin querer:
 
 ```powershell
-# 1. Simular primero, siempre
-Invoke-CISRemediate -Chapter 1 -WhatIf
-
-# 2. Revisar la salida a ojo, y recién ahí aplicar de verdad
-Invoke-CISRemediate -Chapter 1
-
-# También se puede remediar un control puntual
+# 1. Un control puntual
+Invoke-CISRemediate -ControlId '1.1.4' -WhatIf
 Invoke-CISRemediate -ControlId '1.1.4'
+
+# 2. Un grupo de controles a mano (ej. una tanda curada de "quick wins")
+Invoke-CISRemediate -ControlIds '1.1.4','2.3.17.6','9.1.1' -WhatIf
+
+# 3. Una subseccion por prefijo de ID (ej. todo 18.9.*)
+Invoke-CISRemediate -Section '18.9' -WhatIf
+
+# 4. Un capitulo completo
+Invoke-CISRemediate -Chapter 2 -WhatIf
+Invoke-CISRemediate -Chapter 2
+
+# 5. Los 454 controles del benchmark de una — requiere -All explicito
+Invoke-CISRemediate -All -WhatIf
+Invoke-CISRemediate -All -Force -LogPath .\remediacion_full_$(Get-Date -Format yyyyMMdd_HHmmss).csv
 ```
+
+**Regla de oro: simulá primero con `-WhatIf` y revisá la salida antes de
+correr sin él**, sobre todo en `-Chapter`/`-Section`/`-All`. Con `-WhatIf`
+cada `Set-CIS_*` muestra su propio mensaje específico (qué clave de
+registro/right/subcategoría va a tocar), no un mensaje genérico de lote.
+
+Sin `-WhatIf`, antes de aplicar nada te pide una única confirmación de lote
+("vas a remediar N controles, ¿seguís?") — pasá `-Force` para saltearla en
+corridas desatendidas/programadas. `-LogPath` exporta un CSV con el detalle
+de cada control (`Remediated`/`Failed`/`SkippedNoFunction`/`WhatIf`, y el
+estado post-remediación) — pensado para importarlo después en
+`CIS-Dashboard`. Si un `Set-CIS_*` puntual tira error, no aborta el resto
+del lote: queda registrado como `Failed` y sigue con los demás.
 
 `Invoke-CISRemediate` solo toca controles que la auditoría marcó `Fail`
 (nunca `Pass`, `NotApplicable` ni `ManualReviewRequired` — para estos

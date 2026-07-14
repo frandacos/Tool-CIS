@@ -28,6 +28,24 @@ function Invoke-CISAudit {
     .PARAMETER ControlId
         Corre un unico control puntual (ej. '1.1.1').
 
+    .PARAMETER ControlIds
+        Corre una lista puntual de controles (ej. una tanda curada de "quick
+        wins" de bajo riesgo, sin importar de que capitulo sean).
+
+    .PARAMETER Section
+        Corre una subseccion por prefijo de ID (ej. '2.2' trae 2.2.1..2.2.48,
+        '18.9' trae todo 18.9.*). Los filtros se pueden combinar entre si.
+
+    .PARAMETER Level
+        Filtra por perfil de riesgo del benchmark: 'Level 1' (360
+        controles, hardening base, bajo impacto esperado), 'Level 2' (86
+        controles, "defense in depth", el propio benchmark advierte que
+        puede afectar funcionalidad) o 'Next Generation Windows Security'
+        (8 controles de Device Guard/VBS/Credential Guard/LSASS
+        protegido, con su propio criterio de aplicabilidad aparte de
+        Level 1/2). Se puede combinar con -Chapter/-Section (ej. Chapter
+        18 + Level 1 = "lo de bajo riesgo de Administrative Templates").
+
     .PARAMETER OutputPath
         Si se especifica, exporta el resultado a CSV ademas de mostrarlo.
 
@@ -40,13 +58,19 @@ function Invoke-CISAudit {
     param(
         [string]$Chapter,
         [string]$ControlId,
+        [string[]]$ControlIds,
+        [string]$Section,
+        [ValidateSet('Level 1', 'Level 2', 'Next Generation Windows Security')][string]$Level,
         [string]$OutputPath,
         [switch]$ReportCoverage
     )
 
     $inventory = Get-CISInventory
     if ($Chapter) { $inventory = $inventory | Where-Object { $_.chapter -eq $Chapter } }
+    if ($Section) { $inventory = $inventory | Where-Object { $_.control_id -eq $Section -or $_.control_id.StartsWith("$Section.") } }
     if ($ControlId) { $inventory = $inventory | Where-Object { $_.control_id -eq $ControlId } }
+    if ($ControlIds) { $inventory = $inventory | Where-Object { $_.control_id -in $ControlIds } }
+    if ($Level) { $inventory = $inventory | Where-Object { $_.level -eq $Level } }
 
     $results = New-Object System.Collections.Generic.List[object]
     $missing = New-Object System.Collections.Generic.List[string]

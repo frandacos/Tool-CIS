@@ -347,9 +347,26 @@ y `HKCC`, con test de regresión en `CISHarden/Tests/Chapter5-19.Tests.ps1`.
 
 ## Etapa 8 — Consolidación y orquestador final
 
-- [x] `Invoke-CISAudit.ps1` y `Invoke-CISRemediate.ps1` ya soportan
-  `-Chapter`, `-ControlId`, `-OutputPath` desde la Etapa 0 y funcionan sin
-  cambios contra los 454 controles.
+- [x] `Invoke-CISAudit.ps1` soporta `-Chapter`, `-ControlId`, `-ControlIds`,
+  `-Section`, `-OutputPath`, `-ReportCoverage` y funciona sin cambios contra
+  los 454 controles.
+- [x] **`Invoke-CISRemediate.ps1` ampliado (2026-07-14)** con 5 niveles de
+  alcance explícitos: `-ControlId` (uno), `-ControlIds` (lista/"grupo"),
+  `-Section` (subsección por prefijo, ej. `18.9`), `-Chapter` (capítulo
+  completo), `-All` (los 454, requiere el switch explícito — sin alcance
+  tira error en vez de asumir "todo", para que una remediación masiva nunca
+  se dispare por accidente). Agregado: `-Force` para saltear la
+  confirmación de lote en corridas desatendidas, `-LogPath` para exportar
+  el detalle (`Remediated`/`Failed`/`SkippedNoFunction`/`WhatIf` +
+  `PostStatus`) a CSV — pensado para importar en `CIS-Dashboard`, y
+  manejo de errores por control (un `Set-CIS_*` que tira excepción no
+  aborta el resto del lote, queda registrado como `Failed`). Tests en
+  `CISHarden/Tests/InvokeCISRemediate.Tests.ps1`. Nota de diseño: no se
+  reenvían `-WhatIf`/`-Confirm` explícitamente a los `Set-CIS_*` (muchos
+  son wrappers simples sin `[CmdletBinding(SupportsShouldProcess)]` propio
+  y no los aceptarían) — se apoya en la propagación automática de
+  `$WhatIfPreference`/`$ConfirmPreference` de PowerShell hacia las
+  funciones anidadas, que es el mecanismo estándar para esto.
 - [ ] Reporte HTML (hoy solo CSV) con resumen por capítulo
   (Pass/Fail/NA/Manual) y detalle por control.
 - [ ] Ejecutar el audit completo (454/454) contra el server de lab una vez
@@ -358,7 +375,9 @@ y `HKCC`, con test de regresión en `CISHarden/Tests/Chapter5-19.Tests.ps1`.
 - [ ] Ciclo de remediación real (`Set-CIS_*`) probado end-to-end en al
   menos un puñado de controles por capítulo antes de marcar
   `status_validated` en el CSV — sigue pendiente en todos los capítulos
-  (ver notas de cada etapa arriba).
+  (ver notas de cada etapa arriba). Ahora hay herramienta para probar los 5
+  niveles de alcance (`-ControlId`/`-ControlIds`/`-Section`/`-Chapter`/`-All`),
+  falta correrlo en el DC real.
 
 ## Cómo se garantiza que no se salta ningún control
 
