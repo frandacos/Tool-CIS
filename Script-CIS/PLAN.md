@@ -1,5 +1,18 @@
 # Plan por etapas — Herramienta CIS Windows Server 2025
 
+> **Nota de arquitectura (post-generalización):** este documento describe la
+> construcción original del contenido de CIS Windows Server 2025, cuando
+> todo vivía en un único módulo `CISHarden/`. Esa estructura se generalizó
+> después a `CISHarden.Core` (motor genérico, reutilizable) +
+> `Benchmarks/WS2025/CISHarden.WS2025` (contenido de este benchmark), para
+> poder agregar otros benchmarks con el tiempo — ver
+> [`README.md`](README.md#arquitectura-core--un-módulo-por-benchmark). Las
+> rutas de archivo mencionadas más abajo (`CISHarden/...`, `inventory/...`)
+> son las de ANTES de la migración; el contenido y las decisiones que
+> documentan siguen siendo válidos, pero hoy esos archivos viven bajo
+> `Benchmarks/WS2025/CISHarden.WS2025/` y las funciones `Test-CIS_*`/
+> `Set-CIS_*` tienen el tag `WS2025` (ej. `Test-CIS_1_1_1` → `Test-CIS_WS2025_1_1_1`).
+
 Base real extraída de `cis2025.md` (convertido de UTF-16LE a UTF-8 y parseado
 con [`inventory/parse_toc.py`](inventory/parse_toc.py)):
 **454 controles** "Automated"/"Manual" (452 Automated + 2 Manual) en 7

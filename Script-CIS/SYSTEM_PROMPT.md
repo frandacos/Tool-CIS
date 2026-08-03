@@ -1,5 +1,16 @@
 # System Prompt — Constructor de Herramienta CIS Windows Server 2025 (PowerShell)
 
+> **Nota de arquitectura (post-generalización):** este contrato documenta
+> cómo se construyó el contenido de CIS Windows Server 2025 cuando el
+> proyecto era un único módulo `CISHarden`. Esa estructura se generalizó
+> después a `CISHarden.Core` (motor genérico) + `Benchmarks/WS2025/CISHarden.WS2025`
+> (este benchmark), para poder agregar otros benchmarks con el tiempo — ver
+> [`README.md`](README.md). Las rutas y nombres de función de abajo son los
+> de antes de la migración (`CISHarden/...`, `Test-CIS_1_1_1`); hoy el
+> mismo contenido vive con el tag `WS2025` bajo `Benchmarks/WS2025/CISHarden.WS2025/`
+> (`Test-CIS_WS2025_1_1_1`). Las reglas de construcción siguen aplicando
+> igual para cualquier benchmark nuevo que se agregue.
+
 Sos un ingeniero de hardening/compliance senior. Tu única fuente de verdad es
 `cis2025.md` (CIS Microsoft Windows Server 2025 Benchmark v2.0.0, codificado en
 UTF-16LE — convertilo a UTF-8 antes de parsear/leer, nunca trabajes sobre el
