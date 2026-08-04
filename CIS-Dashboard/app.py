@@ -194,8 +194,53 @@ def chapter_sort_key(ch):
 
 
 # --------------------------------------------------------------------------
-# Dashboard
+# Dashboard & Helpers Jerárquicos
 # --------------------------------------------------------------------------
+
+def get_clients_dashboard_overview(conn):
+    """Obtiene el resumen ejecutivo de todos los clientes con métricas acumuladas de sus servidores."""
+    clients = conn.execute("SELECT * FROM client ORDER BY name").fetchall()
+    overview = []
+    
+    for c in clients:
+        servers = conn.execute("SELECT * FROM server WHERE client_id = ? ORDER BY name", (c["id"],)).fetchall()
+        server_list = []
+        total_fail = 0
+        total_pass = 0
+        total_manual = 0
+        total_controls = 0
+        
+        for s in servers:
+            last_run = conn.execute(
+                "SELECT * FROM audit_run WHERE server_id = ? ORDER BY imported_at DESC LIMIT 1",
+                (s["id"],)
+            ).fetchone()
+            
+            counts = run_status_counts(conn, last_run["id"]) if last_run else {st: 0 for st in STATUS_ORDER + ["Total"]}
+            total_fail += counts.get("Fail", 0)
+            total_pass += counts.get("Pass", 0)
+            total_manual += counts.get("ManualReviewRequired", 0)
+            total_controls += counts.get("Total", 0)
+            
+            server_list.append({
+                "server": s,
+                "last_run": last_run,
+                "counts": counts
+            })
+            
+        health_score = int((total_pass / total_controls * 100)) if total_controls > 0 else 0
+        overview.append({
+            "client": c,
+            "servers": server_list,
+            "n_servers": len(servers),
+            "total_fail": total_fail,
+            "total_pass": total_pass,
+            "total_manual": total_manual,
+            "total_controls": total_controls,
+            "health_score": health_score
+        })
+    return overview
+
 
 @app.route("/")
 def dashboard():
@@ -203,6 +248,15 @@ def dashboard():
     assigned_runs, unassigned_runs = latest_run_per_server(conn)
     all_runs = assigned_runs + unassigned_runs
     catalog_count = conn.execute("SELECT COUNT(*) AS n FROM control_catalog").fetchone()["n"]
+
+    clients_overview = get_clients_dashboard_overview(conn)
+    
+    total_clients = len(clients_overview)
+    total_servers = sum(c["n_servers"] for c in clients_overview)
+    global_fails = sum(c["total_fail"] for c in clients_overview)
+    global_passes = sum(c["total_pass"] for c in clients_overview)
+    global_controls = sum(c["total_controls"] for c in clients_overview)
+    global_health = int((global_passes / global_controls * 100)) if global_controls > 0 else 0
 
     run_id = request.args.get("run_id", type=int)
     selected_run = None
@@ -248,6 +302,12 @@ def dashboard():
     conn.close()
     return render_template(
         "dashboard.html",
+        clients_overview=clients_overview,
+        total_clients=total_clients,
+        total_servers=total_servers,
+        global_fails=global_fails,
+        global_passes=global_passes,
+        global_health=global_health,
         grouped_runs=grouped_runs,
         unassigned_runs=unassigned_runs,
         selected_run=selected_run,
@@ -355,6 +415,95 @@ def client_detail(client_id):
         status_colors=STATUS_COLORS,
     )
 
+@app.route("/clients/<int:client_id>/edit", methods=["POST"])
+def edit_client(client_id):
+    conn = get_connection()
+    client = conn.execute("SELECT * FROM client WHERE id = ?", (client_id,)).fetchone()
+    if client is None:
+        conn.close()
+        flash("No se encontró ese cliente.", "error")
+        return redirect(url_for("clients_list"))
+
+    name = request.form.get("name", "").strip()
+    description = request.form.get("description", "").strip()
+    if not name:
+        flash("El cliente necesita un nombre.", "error")
+    else:
+        conn.execute(
+            "UPDATE client SET name = ?, description = ? WHERE id = ?",
+            (name, description or None, client_id),
+        )
+        conn.commit()
+        flash(f"Cliente '{name}' actualizado correctamente.", "success")
+    conn.close()
+    return redirect(request.referrer or url_for("client_detail", client_id=client_id))
+
+
+@app.route("/clients/<int:client_id>/delete", methods=["POST"])
+def delete_client(client_id):
+    conn = get_connection()
+    client = conn.execute("SELECT * FROM client WHERE id = ?", (client_id,)).fetchone()
+    if client is None:
+        conn.close()
+        flash("No se encontró ese cliente.", "error")
+        return redirect(url_for("clients_list"))
+
+    conn.execute("DELETE FROM client WHERE id = ?", (client_id,))
+    conn.commit()
+    conn.close()
+    flash(f"Cliente '{client['name']}' y sus servidores asociados fueron eliminados.", "success")
+    return redirect(url_for("clients_list"))
+
+
+@app.route("/servers/<int:server_id>/edit", methods=["POST"])
+def edit_server(server_id):
+    conn = get_connection()
+    server = conn.execute("SELECT * FROM server WHERE id = ?", (server_id,)).fetchone()
+    if server is None:
+        conn.close()
+        flash("No se encontró ese servidor.", "error")
+        return redirect(url_for("clients_list"))
+
+    name = request.form.get("name", "").strip()
+    hostname = request.form.get("hostname", "").strip()
+    criticality = request.form.get("criticality", "Medium")
+    description = request.form.get("description", "").strip()
+
+    if not name:
+        flash("El servidor necesita un nombre.", "error")
+    else:
+        if criticality not in CRITICALITY_LEVELS:
+            criticality = "Medium"
+        conn.execute(
+            """
+            UPDATE server
+            SET name = ?, hostname = ?, criticality = ?, description = ?
+            WHERE id = ?
+            """,
+            (name, hostname or None, criticality, description or None, server_id),
+        )
+        conn.commit()
+        flash(f"Servidor '{name}' actualizado.", "success")
+    conn.close()
+    return redirect(request.referrer or url_for("server_detail", server_id=server_id))
+
+
+@app.route("/servers/<int:server_id>/delete", methods=["POST"])
+def delete_server(server_id):
+    conn = get_connection()
+    server = conn.execute("SELECT * FROM server WHERE id = ?", (server_id,)).fetchone()
+    if server is None:
+        conn.close()
+        flash("No se encontró ese servidor.", "error")
+        return redirect(url_for("clients_list"))
+
+    client_id = server["client_id"]
+    conn.execute("DELETE FROM server WHERE id = ?", (server_id,))
+    conn.commit()
+    conn.close()
+    flash(f"Servidor '{server['name']}' eliminado.", "success")
+    return redirect(url_for("client_detail", client_id=client_id))
+
 
 @app.route("/servers/<int:server_id>")
 def server_detail(server_id):
@@ -385,12 +534,48 @@ def server_detail(server_id):
         """,
         (server_id,),
     ).fetchall()
+
+    latest_run = runs[0] if runs else None
+    counts = {}
+    chapters = []
+    levels = []
+    fail_controls = []
+    manual_reviews = []
+    
+    if latest_run:
+        counts = run_status_counts(conn, latest_run["id"])
+        chapters = run_chapter_breakdown(conn, latest_run["id"])
+        levels = run_level_breakdown(conn, latest_run["id"])
+        fail_controls = conn.execute(
+            """
+            SELECT cr.control_id, cr.title, cr.expected_value, cr.actual_value,
+                   COALESCE(cc.chapter, '?') AS chapter, cc.level AS level,
+                   cc.remediation_hint AS remediation_hint,
+                   cc.manual_remediation AS manual_remediation
+            FROM control_result cr
+            LEFT JOIN control_catalog cc ON cc.control_id = cr.control_id
+            WHERE cr.run_id = ? AND cr.status = 'Fail'
+            ORDER BY cr.control_id
+            """,
+            (latest_run["id"],),
+        ).fetchall()
+
+    reviews_map = manual_review_decision_map(conn, server_id)
+
     conn.close()
     return render_template(
         "server_detail.html",
         server=server,
         runs=runs,
+        latest_run=latest_run,
+        counts=counts,
+        chapters=chapters,
+        levels=levels,
+        fail_controls=fail_controls,
+        reviews_map=reviews_map,
         criticality_colors=CRITICALITY_COLORS,
+        status_colors=STATUS_COLORS,
+        chapter_titles=CHAPTER_TITLES,
     )
 
 
@@ -442,7 +627,9 @@ def run_detail(run_id):
     search = request.args.get("q", "").strip()
 
     query = """
-        SELECT cr.*, COALESCE(cc.chapter, '?') AS chapter, cc.level AS level
+        SELECT cr.*, COALESCE(cc.chapter, '?') AS chapter, cc.level AS level,
+               cc.remediation_hint AS remediation_hint,
+               cc.manual_remediation AS manual_remediation
         FROM control_result cr
         LEFT JOIN control_catalog cc ON cc.control_id = cr.control_id
         WHERE cr.run_id = ?
@@ -514,6 +701,26 @@ def assign_run_server(run_id):
     return redirect(url_for("run_detail", run_id=run_id))
 
 
+@app.route("/runs/<int:run_id>/delete", methods=["POST"])
+def delete_run(run_id):
+    conn = get_connection()
+    run = conn.execute("SELECT * FROM audit_run WHERE id = ?", (run_id,)).fetchone()
+    if run is None:
+        conn.close()
+        flash("No se encontró esa corrida.", "error")
+        return redirect(url_for("runs_list"))
+    
+    server_id = run["server_id"]
+    conn.execute("DELETE FROM audit_run WHERE id = ?", (run_id,))
+    conn.commit()
+    conn.close()
+    
+    flash("Corrida de auditoría eliminada correctamente.", "success")
+    if server_id:
+        return redirect(url_for("server_detail", server_id=server_id))
+    return redirect(url_for("runs_list"))
+
+
 # --------------------------------------------------------------------------
 # Import
 # --------------------------------------------------------------------------
@@ -524,6 +731,10 @@ def _sniff_csv_kind(header):
         return "catalog"
     if {"controlid", "status", "hostname"}.issubset(header_set):
         return "audit_run"
+    if {"control_id", "remediation_hint"}.issubset(header_set) and len(header_set) == 2:
+        return "remediation_hints"
+    if {"control_id", "manual_remediation"}.issubset(header_set) and len(header_set) == 2:
+        return "manual_remediation"
     return None
 
 
@@ -542,6 +753,28 @@ def _import_catalog(conn, reader):
                 page = excluded.page
             """,
             (row["control_id"], row["title"], row["chapter"], row.get("profile_scope"), row.get("level"), row.get("page")),
+        )
+        n += 1
+    return n
+
+
+def _import_remediation_hints(conn, reader):
+    n = 0
+    for row in reader:
+        conn.execute(
+            "UPDATE control_catalog SET remediation_hint = ? WHERE control_id = ?",
+            (row["remediation_hint"], row["control_id"]),
+        )
+        n += 1
+    return n
+
+
+def _import_manual_remediation(conn, reader):
+    n = 0
+    for row in reader:
+        conn.execute(
+            "UPDATE control_catalog SET manual_remediation = ? WHERE control_id = ?",
+            (row["manual_remediation"], row["control_id"]),
         )
         n += 1
     return n
@@ -609,6 +842,14 @@ def import_csv():
             n = _import_catalog(conn, reader)
             conn.commit()
             flash(f"Catálogo importado: {n} controles.", "success")
+        elif kind == "remediation_hints":
+            n = _import_remediation_hints(conn, reader)
+            conn.commit()
+            flash(f"Guías de remediación importadas: {n} controles.", "success")
+        elif kind == "manual_remediation":
+            n = _import_manual_remediation(conn, reader)
+            conn.commit()
+            flash(f"Procedimientos manuales importados: {n} controles.", "success")
         elif kind == "audit_run":
             if not server_id:
                 flash("Para importar una corrida de auditoría elegí a qué servidor pertenece.", "error")
@@ -723,75 +964,6 @@ def control_detail(control_id):
         decision_colors=DECISION_COLORS,
         status_colors=STATUS_COLORS,
         level_colors=LEVEL_COLORS,
-    )
-
-
-@app.route("/manual-review")
-def manual_review_queue():
-    conn = get_connection()
-    assigned_runs, unassigned_runs = latest_run_per_server(conn)
-
-    decision_filter = request.args.get("decision", "")
-    chapter_filter = request.args.get("chapter", "")
-    server_filter = request.args.get("server_id", type=int)
-
-    items = []
-    chapters_seen = set()
-    servers_seen = {}
-
-    for run in assigned_runs:
-        if server_filter and run["server_id"] != server_filter:
-            continue
-        rows = conn.execute(
-            """
-            SELECT cr.control_id, cr.title, cr.notes, COALESCE(cc.chapter, '?') AS chapter
-            FROM control_result cr
-            LEFT JOIN control_catalog cc ON cc.control_id = cr.control_id
-            WHERE cr.run_id = ? AND cr.status = 'ManualReviewRequired'
-            """,
-            (run["id"],),
-        ).fetchall()
-        if not rows:
-            continue
-
-        server_label = f'{run["client_name"]} / {run["server_name"]}'
-        servers_seen[run["server_id"]] = server_label
-        reviews = manual_review_decision_map(conn, run["server_id"])
-
-        for row in rows:
-            review = reviews.get(row["control_id"])
-            decision = review["decision"] if review else "Pending"
-            chapters_seen.add(row["chapter"])
-            if decision_filter and decision != decision_filter:
-                continue
-            if chapter_filter and row["chapter"] != chapter_filter:
-                continue
-            items.append({
-                "server_id": run["server_id"],
-                "server_label": server_label,
-                "control_id": row["control_id"],
-                "title": row["title"],
-                "chapter": row["chapter"],
-                "notes": row["notes"],
-                "decision": decision,
-                "reviewer": review["reviewer"] if review else None,
-                "updated_at": review["updated_at"] if review else None,
-            })
-
-    items.sort(key=lambda it: (it["server_label"], it["control_id"]))
-    conn.close()
-
-    return render_template(
-        "manual_review.html",
-        items=items,
-        decisions=DECISIONS,
-        decision_colors=DECISION_COLORS,
-        decision_filter=decision_filter,
-        chapter_filter=chapter_filter,
-        server_filter=server_filter,
-        servers=sorted(servers_seen.items(), key=lambda kv: kv[1]),
-        chapters=sorted(chapters_seen, key=chapter_sort_key),
-        has_unassigned=bool(unassigned_runs),
     )
 
 

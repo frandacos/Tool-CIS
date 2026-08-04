@@ -1,77 +1,247 @@
 {% extends "base.html" %}
-{% block title %}{{ run.hostname }} — CIS Dashboard{% endblock %}
+{% block title %}{{ run.hostname }} — VULPS CIS{% endblock %}
 {% block content %}
-<h1>{{ run.hostname }}</h1>
-{% if run.server_id %}
-  <p class="subtitle">
-    <a href="{{ url_for('client_detail', client_id=run.client_id) if run.client_id else '#' }}">{{ run.client_name }}</a>
-    / <a href="{{ url_for('server_detail', server_id=run.server_id) }}">{{ run.server_name }}</a>
-    — Importada {{ run.imported_at }}{% if run.label %} — {{ run.label }}{% endif %} — {{ counts.Total }} controles
-  </p>
-{% else %}
-  <p class="subtitle">Importada {{ run.imported_at }}{% if run.label %} — {{ run.label }}{% endif %} — {{ counts.Total }} controles</p>
-  <div class="flash flash-error">
-    <strong>Esta corrida no está asignada a ningún servidor.</strong> Sin
-    asignarla no se puede hacer revisión manual por control (esas decisiones
-    ahora son por servidor). Asignala acá:
-    <form method="post" action="{{ url_for('assign_run_server', run_id=run.id) }}" class="inline-form">
-      <select name="server_id" required>
-        <option value="">Elegí un servidor...</option>
-        {% for group in clients_tree %}
-          <optgroup label="{{ group.client.name }}">
-            {% for s in group.servers %}
-              <option value="{{ s.id }}">{{ s.name }}</option>
-            {% endfor %}
-          </optgroup>
-        {% endfor %}
-      </select>
-      <button class="btn btn-sm" type="submit">Asignar</button>
-    </form>
-    {% if not clients_tree %}<p class="hint">Todavía no hay servidores creados — <a href="{{ url_for('clients_list') }}">creá uno primero</a>.</p>{% endif %}
-  </div>
-{% endif %}
 
+<div class="page-header">
+  <div class="breadcrumb">
+    <a href="{{ url_for('runs_list') }}">Corridas</a>
+    <span>/</span>
+    <span>{{ run.hostname }}</span>
+  </div>
+  <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px;">
+    <div>
+      <h1>Reporte de Auditoría: {{ run.hostname }}</h1>
+      {% if run.server_id %}
+        <p class="subtitle">
+          Cliente: <a href="{{ url_for('client_detail', client_id=run.client_id) if run.client_id else '#' }}"><strong>{{ run.client_name }}</strong></a>
+          — Servidor: <a href="{{ url_for('server_detail', server_id=run.server_id) }}"><strong>{{ run.server_name }}</strong></a>
+          — Fecha: <span class="mono">{{ run.imported_at }}</span>{% if run.label %} ({{ run.label }}){% endif %}
+        </p>
+      {% else %}
+        <p class="subtitle">Importada el <span class="mono">{{ run.imported_at }}</span>{% if run.label %} ({{ run.label }}){% endif %}</p>
+      {% endif %}
+    </div>
+
+    <form method="post" action="{{ url_for('delete_run', run_id=run.id) }}" onsubmit="return confirm('¿Seguro que querés eliminar esta corrida de auditoría?');">
+      <button type="submit" class="btn btn-danger">Eliminar Corrida</button>
+    </form>
+  </div>
+
+  {% if not run.server_id %}
+    <div class="flash flash-error" style="margin-top: 14px;">
+      <div class="flash-icon">⚠️</div>
+      <div class="flash-content">
+        <strong>Corrida no asignada.</strong> Asignala a un servidor para habilitar el seguimiento de revisiones manuales:
+        <form method="post" action="{{ url_for('assign_run_server', run_id=run.id) }}" class="inline-form" style="margin-top: 8px;">
+          <select name="server_id" required>
+            <option value="">Seleccionar Servidor...</option>
+            {% for group in clients_tree %}
+              <optgroup label="{{ group.client.name }}">
+                {% for s in group.servers %}
+                  <option value="{{ s.id }}">{{ s.name }}</option>
+                {% endfor %}
+              </optgroup>
+            {% endfor %}
+          </select>
+          <button class="btn btn-sm" type="submit">Asignar</button>
+        </form>
+      </div>
+    </div>
+  {% endif %}
+</div>
+
+<!-- Tarjetas de Resumen del Estado de la Corrida -->
+<section class="cards-grid" style="margin-bottom: 28px;">
+  <div class="stat-card">
+    <div class="card-accent" style="background: var(--accent);"></div>
+    <div class="card-value" data-count="{{ counts.Total }}">{{ counts.Total }}</div>
+    <div class="card-label">Total Evaluados</div>
+  </div>
+  <div class="stat-card">
+    <div class="card-accent" style="background: var(--fail);"></div>
+    <div class="card-value" style="color: var(--fail);" data-count="{{ counts.Fail }}">{{ counts.Fail }}</div>
+    <div class="card-label">Fail (Fallidos)</div>
+  </div>
+  <div class="stat-card">
+    <div class="card-accent" style="background: var(--manual);"></div>
+    <div class="card-value" style="color: var(--manual);" data-count="{{ counts.ManualReviewRequired }}">{{ counts.ManualReviewRequired }}</div>
+    <div class="card-label">Revisión Manual</div>
+  </div>
+  <div class="stat-card">
+    <div class="card-accent" style="background: var(--na);"></div>
+    <div class="card-value" style="color: var(--na);" data-count="{{ counts.NotApplicable }}">{{ counts.NotApplicable }}</div>
+    <div class="card-label">No Aplica</div>
+  </div>
+  <div class="stat-card">
+    <div class="card-accent" style="background: var(--pass);"></div>
+    <div class="card-value" style="color: var(--pass);" data-count="{{ counts.Pass }}">{{ counts.Pass }}</div>
+    <div class="card-label">Pass (Exitosos)</div>
+  </div>
+</section>
+
+<!-- Filtros de búsqueda y categorías -->
 <form method="get" class="filters">
-  <input type="text" name="q" placeholder="Buscar control_id o titulo..." value="{{ search }}">
+  <div class="filter-search">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input type="text" name="q" placeholder="Buscar Control ID o título..." value="{{ search }}">
+  </div>
+  
   <select name="status">
-    <option value="">Todos los estados</option>
+    <option value="">Todos los Estados</option>
     {% for s in ["Fail", "ManualReviewRequired", "Error", "NotApplicable", "Pass"] %}
       <option value="{{ s }}" {% if status_filter == s %}selected{% endif %}>{{ s }}</option>
     {% endfor %}
   </select>
+
   <select name="chapter">
-    <option value="">Todos los capitulos</option>
+    <option value="">Todos los Capítulos</option>
     {% for ch in chapters %}
-      <option value="{{ ch }}" {% if chapter_filter == ch %}selected{% endif %}>{{ ch }}</option>
+      <option value="{{ ch }}" {% if chapter_filter == ch %}selected{% endif %}>Capítulo {{ ch }}</option>
     {% endfor %}
   </select>
+
   <select name="level">
-    <option value="">Todos los niveles</option>
+    <option value="">Todos los Niveles</option>
     {% for lv in levels %}
       <option value="{{ lv }}" {% if level_filter == lv %}selected{% endif %}>{{ lv }}</option>
     {% endfor %}
   </select>
-  <button class="btn" type="submit">Filtrar</button>
+
+  <button class="btn btn-primary" type="submit">Filtrar</button>
   <a class="btn btn-ghost" href="{{ url_for('run_detail', run_id=run.id) }}">Limpiar</a>
 </form>
 
-<table class="data-table">
-  <thead>
-    <tr><th>Cap.</th><th>Control</th><th>Titulo</th><th>Nivel</th><th>Estado</th><th>Esperado</th><th>Actual</th></tr>
-  </thead>
-  <tbody>
-    {% for r in results %}
-    <tr>
-      <td>{{ r.chapter }}</td>
-      <td><a href="{{ url_for('control_detail', control_id=r.control_id, server_id=run.server_id) }}">{{ r.control_id }}</a></td>
-      <td>{{ r.title }}</td>
-      <td class="small">{{ r.level or "—" }}</td>
-      <td><span class="badge" style="background:{{ status_colors.get(r.status, '#999') }}">{{ r.status }}</span></td>
-      <td class="mono">{{ r.expected_value }}</td>
-      <td class="mono">{{ r.actual_value }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
-{% if not results %}<p class="empty-inline">Ningun control coincide con el filtro.</p>{% endif %}
+<div class="table-wrapper">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Cap.</th>
+        <th>Control ID</th>
+        <th>Título</th>
+        <th>Nivel</th>
+        <th>Estado</th>
+        <th>Esperado</th>
+        <th>Actual</th>
+        <th class="text-right">Remediación</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in results %}
+      <tr>
+        <td><span class="mono">{{ r.chapter }}</span></td>
+        <td><a class="mono" style="font-weight: 600;" href="{{ url_for('control_detail', control_id=r.control_id, server_id=run.server_id) }}">{{ r.control_id }}</a></td>
+        <td><div class="truncate" style="max-width: 320px;" title="{{ r.title }}">{{ r.title }}</div></td>
+        <td>
+          {% if r.level == 'Level 1' %}<span class="badge badge-level1">L1</span>
+          {% elif r.level == 'Level 2' %}<span class="badge badge-level2">L2</span>
+          {% else %}<span class="badge badge-na">{{ r.level or "—" }}</span>{% endif %}
+        </td>
+        <td>
+          {% if r.status == 'Pass' %}<span class="badge badge-pass">Pass</span>
+          {% elif r.status == 'Fail' %}<span class="badge badge-fail">Fail</span>
+          {% elif r.status == 'ManualReviewRequired' %}<span class="badge badge-manual">Manual</span>
+          {% elif r.status == 'Error' %}<span class="badge badge-error">Error</span>
+          {% else %}<span class="badge badge-na">N/A</span>{% endif %}
+        </td>
+        <td><span class="mono">{{ r.expected_value }}</span></td>
+        <td><span class="mono" {% if r.status == 'Fail' %}style="color: var(--fail);"{% endif %}>{{ r.actual_value }}</span></td>
+        <td class="text-right">
+          <div class="flex flex-center gap-2" style="justify-content: flex-end;">
+            <button type="button" class="btn-info" title="Guía de script automatizado"
+              data-control-id="{{ r.control_id }}" data-title="{{ r.title }}"
+              data-hint="{{ r.remediation_hint or '' }}">ⓘ script</button>
+            <button type="button" class="btn-info btn-info-manual" title="Procedimiento manual CIS"
+              data-control-id="{{ r.control_id }}" data-title="{{ r.title }}"
+              data-manual="{{ r.manual_remediation or '' }}">ⓘ manual</button>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% if not results %}<div class="panel empty-inline" style="margin-top: 14px;">Ningún resultado coincide con los filtros aplicados.</div>{% endif %}
+
+<!-- Modal Remediación Automatizada -->
+<div id="remediation-modal-overlay" class="modal-overlay" hidden>
+  <div class="modal-box">
+    <button type="button" class="modal-close" id="remediation-modal-close" aria-label="Cerrar">&times;</button>
+    <h3 id="remediation-modal-title"></h3>
+    <div class="mono" style="color: var(--accent); margin-bottom: 12px;" id="remediation-modal-control"></div>
+
+    <h4>Alcance de la Remediación</h4>
+    <p id="remediation-modal-hint" class="hint" style="margin-bottom: 14px;"></p>
+
+    <h4>Comando PowerShell de Remediación</h4>
+    <p class="hint" style="margin-bottom: 8px;">Ejecutar en consola de PowerShell elevada en el servidor auditado:</p>
+    <div style="position: relative;">
+      <pre class="modal-code" id="remediation-modal-cmd"></pre>
+      <button type="button" class="modal-code-copy" data-target="remediation-modal-cmd">Copiar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Remediación Manual -->
+<div id="manual-modal-overlay" class="modal-overlay" hidden>
+  <div class="modal-box">
+    <button type="button" class="modal-close" id="manual-modal-close" aria-label="Cerrar">&times;</button>
+    <h3 id="manual-modal-title"></h3>
+    <div class="mono" style="color: var(--error); margin-bottom: 12px;" id="manual-modal-control"></div>
+
+    <h4>Procedimiento Manual Oficial (CIS Benchmark)</h4>
+    <div id="manual-modal-body" class="modal-manual-body"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var overlay = document.getElementById('remediation-modal-overlay');
+  var titleEl = document.getElementById('remediation-modal-title');
+  var controlEl = document.getElementById('remediation-modal-control');
+  var hintEl = document.getElementById('remediation-modal-hint');
+  var cmdEl = document.getElementById('remediation-modal-cmd');
+
+  document.querySelectorAll('.btn-info:not(.btn-info-manual)').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var controlId = btn.getAttribute('data-control-id');
+      var hint = btn.getAttribute('data-hint');
+      titleEl.textContent = btn.getAttribute('data-title');
+      controlEl.textContent = 'Control ID: ' + controlId;
+      hintEl.textContent = hint || 'No hay guía de script cargada para este control.';
+      cmdEl.textContent =
+        "Invoke-CISRemediate -Benchmark WS2025 -ControlId '" + controlId + "' -WhatIf\n" +
+        "Invoke-CISRemediate -Benchmark WS2025 -ControlId '" + controlId + "'";
+      overlay.hidden = false;
+    });
+  });
+
+  function closeModal() { overlay.hidden = true; }
+  document.getElementById('remediation-modal-close').addEventListener('click', closeModal);
+  overlay.addEventListener('click', function (e) { if (e.target === overlay) closeModal(); });
+
+  var mOverlay = document.getElementById('manual-modal-overlay');
+  var mTitleEl = document.getElementById('manual-modal-title');
+  var mControlEl = document.getElementById('manual-modal-control');
+  var mBodyEl = document.getElementById('manual-modal-body');
+
+  document.querySelectorAll('.btn-info-manual').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var controlId = btn.getAttribute('data-control-id');
+      var manual = btn.getAttribute('data-manual');
+      mTitleEl.textContent = btn.getAttribute('data-title');
+      mControlEl.textContent = 'Control ID: ' + controlId;
+      mBodyEl.textContent = manual || 'No hay procedimiento manual disponible para este control.';
+      mOverlay.hidden = false;
+    });
+  });
+
+  function closeManualModal() { mOverlay.hidden = true; }
+  document.getElementById('manual-modal-close').addEventListener('click', closeManualModal);
+  mOverlay.addEventListener('click', function (e) { if (e.target === mOverlay) closeManualModal(); });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') { closeModal(); closeManualModal(); }
+  });
+})();
+</script>
 {% endblock %}

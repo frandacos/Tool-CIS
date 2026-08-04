@@ -1,61 +1,89 @@
 {% extends "base.html" %}
-{% block title %}Revision manual — CIS Dashboard{% endblock %}
+{% block title %}Revisión Manual — VULPS CIS{% endblock %}
 {% block content %}
-<h1>Cola de revisión manual</h1>
-<p class="subtitle">Controles marcados <code>ManualReviewRequired</code> en la última corrida de cada servidor — no tienen remediación automática, alguien tiene que revisarlos a mano. La decisión es por servidor.</p>
+
+<div class="page-header">
+  <h1>Cola de Revisión Manual</h1>
+  <p class="subtitle">Controles que requieren verificación manual o justificación por servidor (e.g. Risk Accepted, Compliant).</p>
+</div>
 
 {% if has_unassigned %}
-  <div class="flash flash-error">
-    Hay corridas importadas sin servidor asignado — sus controles manuales no
-    aparecen acá hasta que las asignes desde <a href="{{ url_for('runs_list') }}">Corridas</a>.
+  <div class="flash flash-error" style="margin-bottom: 20px;">
+    <div class="flash-icon">⚠️</div>
+    <div class="flash-content">
+      Existen corridas no asignadas a servidores. Sus hallazgos de revisión manual no aparecerán en esta cola hasta ser vinculadas.
+      <a href="{{ url_for('runs_list') }}">Ver corridas &rarr;</a>
+    </div>
   </div>
 {% endif %}
 
 <form method="get" class="filters">
   <select name="server_id">
-    <option value="">Todos los servidores</option>
+    <option value="">Todos los Servidores</option>
     {% for sid, label in servers %}
       <option value="{{ sid }}" {% if server_filter == sid %}selected{% endif %}>{{ label }}</option>
     {% endfor %}
   </select>
+
   <select name="decision">
-    <option value="">Todas las decisiones</option>
+    <option value="">Todas las Decisiones</option>
     {% for d in decisions %}
       <option value="{{ d }}" {% if decision_filter == d %}selected{% endif %}>{{ d }}</option>
     {% endfor %}
   </select>
+
   <select name="chapter">
-    <option value="">Todos los capitulos</option>
+    <option value="">Todos los Capítulos</option>
     {% for ch in chapters %}
-      <option value="{{ ch }}" {% if chapter_filter == ch %}selected{% endif %}>{{ ch }}</option>
+      <option value="{{ ch }}" {% if chapter_filter == ch %}selected{% endif %}>Capítulo {{ ch }}</option>
     {% endfor %}
   </select>
-  <button class="btn" type="submit">Filtrar</button>
+
+  <button class="btn btn-primary" type="submit">Filtrar</button>
   <a class="btn btn-ghost" href="{{ url_for('manual_review_queue') }}">Limpiar</a>
 </form>
 
 {% if items %}
-<table class="data-table">
-  <thead>
-    <tr><th>Servidor</th><th>Cap.</th><th>Control</th><th>Titulo</th><th>Motivo</th><th>Decision</th><th>Revisor</th><th>Actualizado</th><th></th></tr>
-  </thead>
-  <tbody>
-    {% for it in items %}
-    <tr>
-      <td class="small">{{ it.server_label }}</td>
-      <td>{{ it.chapter }}</td>
-      <td><a href="{{ url_for('control_detail', control_id=it.control_id, server_id=it.server_id) }}">{{ it.control_id }}</a></td>
-      <td>{{ it.title }}</td>
-      <td class="small">{{ it.notes }}</td>
-      <td><span class="badge" style="background:{{ decision_colors.get(it.decision, '#999') }}">{{ it.decision }}</span></td>
-      <td>{{ it.reviewer or "—" }}</td>
-      <td>{{ it.updated_at or "—" }}</td>
-      <td><a class="btn btn-sm" href="{{ url_for('control_detail', control_id=it.control_id, server_id=it.server_id) }}">Revisar</a></td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+<div class="table-wrapper">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Servidor</th>
+        <th>Cap.</th>
+        <th>Control ID</th>
+        <th>Título</th>
+        <th>Notas</th>
+        <th>Decisión</th>
+        <th>Revisor</th>
+        <th>Actualizado</th>
+        <th class="text-right">Acción</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for it in items %}
+      <tr>
+        <td><div class="truncate" style="font-weight: 600;" title="{{ it.server_label }}">{{ it.server_label }}</div></td>
+        <td><span class="mono">{{ it.chapter }}</span></td>
+        <td><a class="mono" style="font-weight: 600;" href="{{ url_for('control_detail', control_id=it.control_id, server_id=it.server_id) }}">{{ it.control_id }}</a></td>
+        <td><div class="truncate" title="{{ it.title }}">{{ it.title }}</div></td>
+        <td><span class="text-muted small">{{ it.notes }}</span></td>
+        <td>
+          {% if it.decision == 'Compliant' %}<span class="badge badge-compliant">Compliant</span>
+          {% elif it.decision == 'NonCompliant' %}<span class="badge badge-noncompliant">NonCompliant</span>
+          {% elif it.decision == 'RiskAccepted' %}<span class="badge badge-riskaccepted">RiskAccepted</span>
+          {% else %}<span class="badge badge-pending">Pending</span>{% endif %}
+        </td>
+        <td><span class="mono">{{ it.reviewer or "—" }}</span></td>
+        <td><span class="mono small">{{ it.updated_at or "—" }}</span></td>
+        <td class="text-right">
+          <a class="btn btn-ghost btn-sm" href="{{ url_for('control_detail', control_id=it.control_id, server_id=it.server_id) }}">Evaluar &rarr;</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
 {% else %}
-  <p class="empty-inline">No hay controles de revisión manual con este filtro (o todavía no importaste ninguna corrida asignada a un servidor).</p>
+  <div class="panel empty-inline">No hay controles de revisión manual registrados con los criterios seleccionados.</div>
 {% endif %}
 {% endblock %}

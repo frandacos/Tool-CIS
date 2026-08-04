@@ -1,37 +1,178 @@
 {% extends "base.html" %}
-{% block title %}Clientes — CIS Dashboard{% endblock %}
+{% block title %}Clientes — VULPS CIS{% endblock %}
 {% block content %}
-<h1>Clientes</h1>
-<p class="subtitle">Cada cliente agrupa sus servidores. Las corridas de auditoría y las revisiones manuales se cargan por servidor.</p>
+
+<div class="page-header">
+  <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px;">
+    <div>
+      <h1>Gestión de Clientes</h1>
+      <p class="subtitle">Agrupación de servidores e infraestructura por organización o proyecto.</p>
+    </div>
+    <button type="button" class="btn btn-primary" id="open-add-client-modal">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Nuevo Cliente
+    </button>
+  </div>
+</div>
 
 {% if clients %}
-<table class="data-table">
-  <thead>
-    <tr><th>Cliente</th><th>Descripción</th><th>Servidores</th><th></th></tr>
-  </thead>
-  <tbody>
-    {% for c in clients %}
-    <tr>
-      <td><a href="{{ url_for('client_detail', client_id=c.id) }}">{{ c.name }}</a></td>
-      <td class="small">{{ c.description or "—" }}</td>
-      <td>{{ c.n_servers }}</td>
-      <td><a class="btn btn-sm" href="{{ url_for('client_detail', client_id=c.id) }}">Ver</a></td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+<div class="table-wrapper" style="margin-bottom: 32px;">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Cliente</th>
+        <th>Descripción</th>
+        <th>Servidores</th>
+        <th class="text-right">Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in clients %}
+      <tr>
+        <td>
+          <div class="flex flex-center gap-2">
+            <div class="avatar-chip" style="background: linear-gradient(135deg, #2563eb, #8b5cf6);">{{ c.name[:2] }}</div>
+            <a style="font-weight: 600; font-size: 0.95rem;" href="{{ url_for('client_detail', client_id=c.id) }}">{{ c.name }}</a>
+          </div>
+        </td>
+        <td><span class="text-muted">{{ c.description or "Sin descripción" }}</span></td>
+        <td><span class="badge badge-riskaccepted">{{ c.n_servers }} servidores</span></td>
+        <td class="text-right">
+          <div class="flex flex-center gap-2" style="justify-content: flex-end;">
+            <a class="btn btn-ghost btn-xs" href="{{ url_for('client_detail', client_id=c.id) }}">Gestionar</a>
+            <button type="button" class="btn btn-ghost btn-xs btn-edit-client"
+              data-id="{{ c.id }}" data-name="{{ c.name }}" data-description="{{ c.description or '' }}">Editar</button>
+            <form method="post" action="{{ url_for('delete_client', client_id=c.id) }}" onsubmit="return confirm('¿Seguro que querés eliminar el cliente {{ c.name }}? Se eliminarán también sus servidores.');" style="display: inline;">
+              <button type="submit" class="btn btn-danger btn-xs">Eliminar</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
 {% else %}
-  <p class="empty-inline">Todavía no creaste ningún cliente.</p>
+  <div class="empty-state" style="margin-bottom: 32px;">
+    <div class="es-icon">🏢</div>
+    <h2>Sin Clientes Registrados</h2>
+    <p>Todavía no has registrado ningún cliente. Creá una empresa u organización para asignar servidores y auditorías de hardening.</p>
+    <button type="button" class="btn btn-primary" id="open-add-client-modal-empty">Crear Primer Cliente</button>
+  </div>
 {% endif %}
 
-<h2>Nuevo cliente</h2>
-<form method="post" class="review-form">
-  <label for="name">Nombre</label>
-  <input type="text" name="name" id="name" placeholder="ej. Acme Corp" required>
+<!-- Modal Crear Cliente -->
+<div id="add-client-modal-overlay" class="modal-overlay" hidden>
+  <div class="modal-box" style="max-width: 520px;">
+    <button type="button" class="modal-close" id="add-client-modal-close" aria-label="Cerrar">&times;</button>
+    <h3>Nuevo Cliente</h3>
+    <p class="hint" style="margin-bottom: 18px;">Creá una empresa u organización para asignar servidores y auditorías.</p>
 
-  <label for="description">Descripción (opcional)</label>
-  <textarea name="description" id="description" rows="2" placeholder="Notas sobre el cliente / alcance del engagement"></textarea>
+    <form method="post" data-validate>
+      <div class="form-group">
+        <label for="name">Nombre del cliente *</label>
+        <input type="text" name="name" id="name" placeholder="ej. Acme Corporation" required minlength="2">
+        <div class="field-error"></div>
+      </div>
 
-  <button class="btn" type="submit">Crear cliente</button>
-</form>
+      <div class="form-group">
+        <label for="description">Descripción (opcional)</label>
+        <textarea name="description" id="description" rows="3" placeholder="Notas adicionales del alcance o contrato..." maxlength="500"></textarea>
+        <div class="field-count">0/500</div>
+      </div>
+
+      <div class="flex gap-2" style="justify-content: flex-end; margin-top: 20px;">
+        <button type="button" class="btn btn-ghost" id="add-client-modal-cancel">Cancelar</button>
+        <button class="btn btn-primary" type="submit">Crear Cliente</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal Editar Cliente -->
+<div id="edit-client-modal-overlay" class="modal-overlay" hidden>
+  <div class="modal-box" style="max-width: 520px;">
+    <button type="button" class="modal-close" id="edit-client-modal-close" aria-label="Cerrar">&times;</button>
+    <h3>Editar Cliente</h3>
+    <p class="hint" style="margin-bottom: 18px;">Modificá la información de la empresa u organización.</p>
+
+    <form method="post" id="edit-client-form" data-validate>
+      <div class="form-group">
+        <label for="edit-client-name">Nombre del cliente *</label>
+        <input type="text" name="name" id="edit-client-name" required minlength="2">
+        <div class="field-error"></div>
+      </div>
+
+      <div class="form-group">
+        <label for="edit-client-description">Descripción (opcional)</label>
+        <textarea name="description" id="edit-client-description" rows="3" maxlength="500"></textarea>
+      </div>
+
+      <div class="flex gap-2" style="justify-content: flex-end; margin-top: 20px;">
+        <button type="button" class="btn btn-ghost" id="edit-client-modal-cancel">Cancelar</button>
+        <button class="btn btn-primary" type="submit">Guardar Cambios</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  // Add Client Modal
+  const overlay = document.getElementById('add-client-modal-overlay');
+  const openBtn = document.getElementById('open-add-client-modal');
+  const openBtnEmpty = document.getElementById('open-add-client-modal-empty');
+  const closeBtn = document.getElementById('add-client-modal-close');
+  const cancelBtn = document.getElementById('add-client-modal-cancel');
+  const nameInput = document.getElementById('name');
+
+  function openModal() {
+    overlay.hidden = false;
+    setTimeout(() => { if (nameInput) nameInput.focus(); }, 100);
+  }
+  function closeModal() { overlay.hidden = true; }
+
+  if (openBtn) openBtn.addEventListener('click', openModal);
+  if (openBtnEmpty) openBtnEmpty.addEventListener('click', openModal);
+  if (closeBtn) closeBtn.addEventListener('click', closeModal);
+  if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
+  if (overlay) overlay.addEventListener('click', (e) => { if (e.target === overlay) closeModal(); });
+
+  // Edit Client Modal
+  const editOverlay = document.getElementById('edit-client-modal-overlay');
+  const editForm = document.getElementById('edit-client-form');
+  const editNameInput = document.getElementById('edit-client-name');
+  const editDescInput = document.getElementById('edit-client-description');
+  const editCloseBtn = document.getElementById('edit-client-modal-close');
+  const editCancelBtn = document.getElementById('edit-client-modal-cancel');
+
+  document.querySelectorAll('.btn-edit-client').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const clientId = btn.getAttribute('data-id');
+      const name = btn.getAttribute('data-name');
+      const desc = btn.getAttribute('data-description');
+
+      editForm.action = `/clients/${clientId}/edit`;
+      editNameInput.value = name;
+      editDescInput.value = desc;
+
+      editOverlay.hidden = false;
+      setTimeout(() => { editNameInput.focus(); }, 100);
+    });
+  });
+
+  function closeEditModal() { editOverlay.hidden = true; }
+  if (editCloseBtn) editCloseBtn.addEventListener('click', closeEditModal);
+  if (editCancelBtn) editCancelBtn.addEventListener('click', closeEditModal);
+  if (editOverlay) editOverlay.addEventListener('click', (e) => { if (e.target === editOverlay) closeEditModal(); });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      if (overlay && !overlay.hidden) closeModal();
+      if (editOverlay && !editOverlay.hidden) closeEditModal();
+    }
+  });
+});
+</script>
+
 {% endblock %}

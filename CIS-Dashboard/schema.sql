@@ -23,13 +23,24 @@ CREATE TABLE IF NOT EXISTS server (
 CREATE INDEX IF NOT EXISTS idx_server_client ON server(client_id);
 
 -- Catalogo canonico de controles (importado desde cis2025_controls_master.csv)
+-- remediation_hint: resumen de que toca Set-CIS_WS2025_<control_id> al remediar
+-- (clave de registro, politica local, user right, etc.), generado por
+-- Script-CIS/.../inventory/gen_remediation_hints.py e importado desde
+-- remediation_hints.csv. NULL si el control no tiene Set-CIS_WS2025_*
+-- (ManualReviewRequired) o si todavia no se importo ese CSV.
+-- manual_remediation: seccion "Remediation:" oficial del benchmark CIS
+-- (UI Path via GPO), extraida de cis2025.md por gen_manual_remediation.py
+-- e importada desde manual_remediation.csv -- el procedimiento manual, sin
+-- pasar por el Set-CIS_WS2025_* de CISHarden.
 CREATE TABLE IF NOT EXISTS control_catalog (
     control_id TEXT PRIMARY KEY,
     title TEXT NOT NULL,
     chapter TEXT NOT NULL,
     profile_scope TEXT,
     level TEXT,
-    page TEXT
+    page TEXT,
+    remediation_hint TEXT,
+    manual_remediation TEXT
 );
 
 -- Una fila por cada archivo de auditoria importado (una corrida de Invoke-CISAudit).

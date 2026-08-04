@@ -1,46 +1,92 @@
 {% extends "base.html" %}
-{% block title %}Importar — CIS Dashboard{% endblock %}
+{% block title %}Importar — VULPS CIS{% endblock %}
 {% block content %}
-<h1>Importar CSV</h1>
 
-<div class="import-help">
-  <p>Esta pantalla acepta dos tipos de archivo (se detectan solos por las columnas):</p>
-  <ul>
-    <li><strong>Catalogo de controles</strong> — <code>Tool-CIS/inventory/cis2025_controls_master.csv</code>.
-      Importalo primero (o cuando cambie): le da titulo/capitulo/nivel a cada control_id en toda
-      la app. No necesita cliente/servidor, es global.</li>
-    <li><strong>Corrida de auditoria</strong> — el CSV que exporta
-      <code>Invoke-CISAudit -OutputPath archivo.csv</code> en CISHarden, desde el servidor
-      auditado. <strong>Tenés que elegir a qué servidor pertenece</strong> antes de subirla —
-      es lo que permite la trazabilidad por cliente/servidor. Cada importación crea una
-      corrida nueva (no pisa las anteriores).</li>
-  </ul>
-  {% if not clients_tree %}
-    <p class="hint">Todavía no creaste ningún cliente/servidor —
-      <a href="{{ url_for('clients_list') }}">creá uno primero</a> si vas a importar una corrida
-      de auditoría (el catálogo se puede importar igual, no lo necesita).</p>
-  {% endif %}
+<div class="page-header">
+  <h1>Importación de Datos</h1>
+  <p class="subtitle">Carga masiva de catálogos CIS, guías de remediación y corridas de auditoría.</p>
 </div>
 
-<form method="post" enctype="multipart/form-data" class="import-form">
-  <label for="file">Archivo CSV</label>
-  <input type="file" name="file" id="file" accept=".csv" required>
+<div class="import-types">
+  <div class="import-type-card">
+    <div class="itc-icon">📑</div>
+    <div class="itc-title">Catálogo de Controles</div>
+    <div class="itc-desc">
+      <code>cis2025_controls_master.csv</code><br>
+      Define la estructura máster del benchmark (títulos, capítulos y niveles).
+    </div>
+  </div>
 
-  <label for="server_id">Servidor (solo para corridas de auditoría)</label>
-  <select name="server_id" id="server_id">
-    <option value="">— No aplica / es el catálogo —</option>
-    {% for group in clients_tree %}
-      <optgroup label="{{ group.client.name }}">
-        {% for s in group.servers %}
-          <option value="{{ s.id }}">{{ s.name }}{% if s.hostname %} ({{ s.hostname }}){% endif %}</option>
+  <div class="import-type-card">
+    <div class="itc-icon">⚙️</div>
+    <div class="itc-title">Remediación Script</div>
+    <div class="itc-desc">
+      <code>remediation_hints.csv</code><br>
+      Carga las guías de PowerShell para ejecutar la remediación automatizada.
+    </div>
+  </div>
+
+  <div class="import-type-card">
+    <div class="itc-icon">📖</div>
+    <div class="itc-title">Remediación Manual</div>
+    <div class="itc-desc">
+      <code>manual_remediation.csv</code><br>
+      Carga las instrucciones oficiales de GPO / UI Path según el estándar CIS.
+    </div>
+  </div>
+
+  <div class="import-type-card">
+    <div class="itc-icon">🖥️</div>
+    <div class="itc-title">Corrida de Auditoría</div>
+    <div class="itc-desc">
+      Exportación de <code>Invoke-CISAudit</code><br>
+      Asociala a un servidor para generar los reportes y hallazgos.
+    </div>
+  </div>
+</div>
+
+<div class="form-card" style="max-width: 600px;">
+  <form method="post" enctype="multipart/form-data" data-validate>
+    
+    <div class="form-group">
+      <label>Archivo CSV *</label>
+      <div class="drop-zone" id="drop-zone">
+        <input type="file" name="file" id="file" accept=".csv" required>
+        <div class="dz-icon">📥</div>
+        <div class="dz-title">Arrastrá tu archivo CSV acá o hacé click para examinar</div>
+        <div class="dz-sub">Formatos soportados: Catálogo máster, Remediaciones y Auditorías</div>
+        <div class="dz-selected">
+          <span>📄</span>
+          <span class="dz-filename"></span>
+        </div>
+      </div>
+      <div class="field-error"></div>
+    </div>
+
+    <div class="form-group">
+      <label for="server_id">Servidor de Destino (Solo para corridas de auditoría)</label>
+      <select name="server_id" id="server_id" class="form-select">
+        <option value="">— No aplica / Importación de Catálogo o Guías —</option>
+        {% for group in clients_tree %}
+          <optgroup label="{{ group.client.name }}">
+            {% for s in group.servers %}
+              <option value="{{ s.id }}" {% if request.args.get('server_id', type=int) == s.id %}selected{% endif %}>{{ s.name }}{% if s.hostname %} ({{ s.hostname }}){% endif %}</option>
+            {% endfor %}
+          </optgroup>
         {% endfor %}
-      </optgroup>
-    {% endfor %}
-  </select>
+      </select>
+      {% if not clients_tree %}
+        <p class="field-hint" style="margin-top: 4px;">Aviso: Si vas a importar una corrida de auditoría, primero debes <a href="{{ url_for('clients_list') }}">crear un cliente y servidor</a>.</p>
+      {% endif %}
+    </div>
 
-  <label for="label">Etiqueta (opcional, solo aplica a corridas de auditoría)</label>
-  <input type="text" name="label" id="label" placeholder="ej. post-Etapa-18d, pre-remediacion...">
+    <div class="form-group">
+      <label for="label">Etiqueta de la Corrida (Opcional)</label>
+      <input type="text" name="label" id="label" placeholder="ej. Auditoría Trimestral Q3, Pre-harding, Post-remediación...">
+    </div>
 
-  <button class="btn" type="submit">Importar</button>
-</form>
+    <button class="btn btn-primary" type="submit" style="margin-top: 8px; width: 100%;">Procesar e Importar CSV</button>
+  </form>
+</div>
+
 {% endblock %}

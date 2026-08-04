@@ -1,151 +1,133 @@
 {% extends "base.html" %}
 {% import "_macros.html" as m %}
-{% block title %}Dashboard — CIS Dashboard{% endblock %}
+{% block title %}Dashboard General — VULPS CIS{% endblock %}
 {% block content %}
 
-{% if not grouped_runs and not unassigned_runs %}
-  <div class="empty-state">
-    <h2>Todavia no importaste nada</h2>
-    <p>Primero creá un <a href="{{ url_for('clients_list') }}">cliente y sus servidores</a>,
-      importá el catálogo de controles
-      (<code>inventory/cis2025_controls_master.csv</code>) y al menos una
-      corrida de auditoria (el CSV que exporta
-      <code>Invoke-CISAudit -OutputPath</code> en CISHarden).</p>
-    <a class="btn" href="{{ url_for('import_csv') }}">Importar CSV</a>
+<div class="page-header">
+  <h1>Dashboard Ejecutivo de Seguridad</h1>
+  <p class="subtitle">Estado global de hardening y cumplimiento de benchmarks CIS por cliente y servidor.</p>
+</div>
+
+<section class="cards-grid" style="margin-bottom: 32px;">
+  <div class="stat-card">
+    <div class="card-accent" style="background: var(--accent);"></div>
+    <div class="card-value" data-count="{{ total_clients }}">{{ total_clients }}</div>
+    <div class="card-label">Clientes / Organizaciones</div>
   </div>
-{% else %}
+  <div class="stat-card">
+    <div class="card-accent" style="background: #8b5cf6;"></div>
+    <div class="card-value" data-count="{{ total_servers }}">{{ total_servers }}</div>
+    <div class="card-label">Servidores Auditados</div>
+  </div>
+  <div class="stat-card">
+    <div class="card-accent" style="background: var(--pass);"></div>
+    <div class="card-value" style="color: var(--pass);" data-count="{{ global_health }}">{{ global_health }}%</div>
+    <div class="card-label">Cumplimiento Global</div>
+  </div>
+  <div class="stat-card">
+    <div class="card-accent" style="background: var(--fail);"></div>
+    <div class="card-value" style="color: var(--fail);" data-count="{{ global_fails }}">{{ global_fails }}</div>
+    <div class="card-label">Hallazgos Críticos (Fail)</div>
+  </div>
+</section>
 
-  <form method="get" class="run-picker">
-    <label for="run_id">Servidor / corrida:</label>
-    <select name="run_id" id="run_id" onchange="this.form.submit()">
-      {% for client_name, runs in grouped_runs %}
-        <optgroup label="{{ client_name }}">
-          {% for r in runs %}
-            <option value="{{ r.id }}" {% if selected_run and r.id == selected_run.id %}selected{% endif %}>
-              {{ r.server_name }} — {{ r.imported_at }}{% if r.label %} ({{ r.label }}){% endif %}
-            </option>
-          {% endfor %}
-        </optgroup>
-      {% endfor %}
-      {% if unassigned_runs %}
-        <optgroup label="Sin cliente asignado">
-          {% for r in unassigned_runs %}
-            <option value="{{ r.id }}" {% if selected_run and r.id == selected_run.id %}selected{% endif %}>
-              {{ r.hostname }} — {{ r.imported_at }}{% if r.label %} ({{ r.label }}){% endif %}
-            </option>
-          {% endfor %}
-        </optgroup>
-      {% endif %}
-    </select>
-    <a href="{{ url_for('runs_list') }}">ver todas las corridas &rarr;</a>
-  </form>
+<h2>Estado de Hardening por Cliente</h2>
 
-  {% if selected_run and not selected_run.server_id %}
-    <div class="flash flash-error">
-      Esta corrida no está asignada a ningún servidor todavía (no se puede
-      revisar manualmente hasta asignarla).
-      <a href="{{ url_for('run_detail', run_id=selected_run.id) }}">Asignarla a un servidor &rarr;</a>
-    </div>
-  {% endif %}
+{% if clients_overview %}
+<div style="display: flex; flex-direction: column; gap: 20px; margin-bottom: 36px;">
+  {% for item in clients_overview %}
+    {% set c = item.client %}
+    <div class="panel" style="display: flex; flex-direction: column; gap: 16px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+        <div class="flex flex-center gap-3">
+          <div class="avatar-chip" style="background: linear-gradient(135deg, #2563eb, #8b5cf6); width: 42px; height: 42px; font-size: 0.9rem;">{{ c.name[:2] }}</div>
+          <div>
+            <a style="font-size: 1.1rem; font-weight: 700;" href="{{ url_for('client_detail', client_id=c.id) }}">{{ c.name }}</a>
+            <div class="small text-muted">{{ item.n_servers }} servidores registrados</div>
+          </div>
+        </div>
 
-  {% if catalog_count == 0 %}
-    <div class="flash flash-error">
-      <strong>No importaste el catálogo de controles todavía.</strong> Por eso
-      "Cobertura por capítulo" y "Por nivel de riesgo" muestran todo junto en
-      una sola fila ("? · Sección ?" / "Sin clasificar") — sin el catálogo, la
-      app no sabe a qué capítulo ni nivel pertenece cada <code>control_id</code>.
-      Importá <code>inventory/cis2025_controls_master.csv</code> desde
-      <a href="{{ url_for('import_csv') }}">Importar</a> para arreglarlo.
-    </div>
-  {% endif %}
+        <div class="flex flex-center gap-3">
+          <div style="text-align: right;">
+            <div style="font-size: 1.2rem; font-weight: 800; color: {% if item.health_score >= 80 %}var(--pass){% elif item.health_score >= 50 %}var(--manual){% else %}var(--fail){% endif %};">
+              {{ item.health_score }}%
+            </div>
+            <div class="small text-muted">Salud de Hardening</div>
+          </div>
+          <a class="btn btn-ghost btn-sm" href="{{ url_for('client_detail', client_id=c.id) }}">Ver Cliente &rarr;</a>
+        </div>
+      </div>
 
-  {% if selected_run %}
-    <section class="cards">
-      <div class="card total">
-        <div class="card-value">{{ counts.Total }}</div>
-        <div class="card-label">Total controles</div>
-      </div>
-      <div class="card" style="border-top-color: {{ status_colors.Fail }}">
-        <div class="card-value">{{ counts.Fail }}</div>
-        <div class="card-label">Fail</div>
-      </div>
-      <div class="card" style="border-top-color: {{ status_colors.ManualReviewRequired }}">
-        <div class="card-value">{{ counts.ManualReviewRequired }}</div>
-        <div class="card-label">Manual Review</div>
-        {% if manual_pending %}<div class="card-sub">{{ manual_pending }} sin decidir</div>{% endif %}
-      </div>
-      <div class="card" style="border-top-color: {{ status_colors.NotApplicable }}">
-        <div class="card-value">{{ counts.NotApplicable }}</div>
-        <div class="card-label">Not Applicable</div>
-      </div>
-      <div class="card" style="border-top-color: {{ status_colors.Pass }}">
-        <div class="card-value">{{ counts.Pass }}</div>
-        <div class="card-label">Pass</div>
-      </div>
-      {% if counts.Error %}
-      <div class="card" style="border-top-color: {{ status_colors.Error }}">
-        <div class="card-value">{{ counts.Error }}</div>
-        <div class="card-label">Error</div>
-      </div>
-      {% endif %}
-    </section>
-
-    <section>
-      <div class="section-head">
-        <h2>Cobertura por capítulo</h2>
-        <p class="hint">Ordenado por número de capítulo. El % de la derecha es la
-          proporción en <span class="inline-fail">Fail</span> — la señal más
-          rápida de por dónde priorizar.</p>
-      </div>
-      {% for chapter, s in chapters %}
-        {{ m.coverage_row(
-          chapter ~ " · " ~ chapter_titles.get(chapter, "Sección " ~ chapter),
-          None,
-          s
-        ) }}
-      {% endfor %}
-    </section>
-
-    <section>
-      <div class="section-head">
-        <h2>Por nivel de riesgo</h2>
-        <p class="hint">
-          <strong>Level 2</strong> es "defense in depth": el propio benchmark
-          advierte que puede afectar funcionalidad. Priorizá remediar
-          <strong>Level 1</strong> primero y revisá Level 2 con más cuidado
-          antes de aplicarlo en masa
-          (<code>Invoke-CISRemediate -Level 'Level 1'</code> en CISHarden).
-        </p>
-      </div>
-      {% for level, s in levels %}
-        {{ m.coverage_row(level, None, s, level_hints.get(level)) }}
-      {% endfor %}
-    </section>
-
-    <section>
-      <h2>Controles en Fail ({{ fail_controls|length }})</h2>
-      {% if fail_controls %}
-      <table class="data-table">
-        <thead>
-          <tr><th>Cap.</th><th>Control</th><th>Titulo</th><th>Nivel</th><th>Esperado</th><th>Actual</th></tr>
-        </thead>
-        <tbody>
-          {% for c in fail_controls %}
-          <tr>
-            <td>{{ c.chapter }}</td>
-            <td><a href="{{ url_for('control_detail', control_id=c.control_id, server_id=selected_run.server_id) }}">{{ c.control_id }}</a></td>
-            <td>{{ c.title }}</td>
-            <td class="small">{{ c.level or "—" }}</td>
-            <td class="mono">{{ c.expected_value }}</td>
-            <td class="mono">{{ c.actual_value }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+      {% if item.servers %}
+        <div class="table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Servidor</th>
+                <th>Criticidad</th>
+                <th>Última Auditoría</th>
+                <th>Fail</th>
+                <th>Manual</th>
+                <th>Pass</th>
+                <th class="text-right">Hardening</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for s_item in item.servers %}
+                {% set s = s_item.server %}
+                {% set counts = s_item.counts %}
+                <tr>
+                  <td>
+                    <a style="font-weight: 600;" href="{{ url_for('server_detail', server_id=s.id) }}">{{ s.name }}</a>
+                    {% if s.hostname %}<div class="mono small">{{ s.hostname }}</div>{% endif %}
+                  </td>
+                  <td>
+                    {% if s.criticality == 'Critical' %}<span class="badge badge-critical">Critical</span>
+                    {% elif s.criticality == 'High' %}<span class="badge badge-high">High</span>
+                    {% elif s.criticality == 'Medium' %}<span class="badge badge-medium">Medium</span>
+                    {% else %}<span class="badge badge-low">Low</span>{% endif %}
+                  </td>
+                  {% if s_item.last_run %}
+                    <td><span class="mono small">{{ s_item.last_run.imported_at }}</span></td>
+                    <td><span class="badge badge-fail">{{ counts.Fail }}</span></td>
+                    <td><span class="badge badge-manual">{{ counts.ManualReviewRequired }}</span></td>
+                    <td><span class="badge badge-pass">{{ counts.Pass }}</span></td>
+                  {% else %}
+                    <td colspan="4"><span class="text-muted small">Sin auditoría cargada</span></td>
+                  {% endif %}
+                  <td class="text-right">
+                    <a class="btn btn-ghost btn-sm" href="{{ url_for('server_detail', server_id=s.id) }}">Ver Hardening &rarr;</a>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
       {% else %}
-        <p class="empty-inline">Ningun control en Fail en esta corrida. 🎉</p>
+        <div class="empty-inline" style="padding: 16px; background: var(--surface-2); border-radius: var(--radius);">
+          No se han configurado servidores para este cliente aún. <a href="{{ url_for('client_detail', client_id=c.id) }}">Agregar servidor &rarr;</a>
+        </div>
       {% endif %}
-    </section>
-  {% endif %}
+    </div>
+  {% endfor %}
+</div>
+{% else %}
+  <div class="empty-state">
+    <div class="es-icon">🛡️</div>
+    <h2>Sin Clientes Registrados</h2>
+    <p>Registrá tu primera organización o empresa para empezar a cargar servidores y auditar su nivel de hardening.</p>
+    <a class="btn btn-primary" href="{{ url_for('clients_list') }}">Crear Primer Cliente</a>
+  </div>
 {% endif %}
+
+{% if unassigned_runs %}
+  <div class="flash flash-error" style="margin-top: 24px;">
+    <div class="flash-icon">⚠️</div>
+    <div class="flash-content">
+      <strong>Atención:</strong> Existen {{ unassigned_runs|length }} corridas de auditoría cargadas que no han sido asignadas a ningún cliente/servidor. 
+      <a href="{{ url_for('runs_list') }}">Vincular corridas ahora &rarr;</a>
+    </div>
+  </div>
+{% endif %}
+
 {% endblock %}

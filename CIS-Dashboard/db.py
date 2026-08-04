@@ -61,6 +61,16 @@ def _migrate(conn):
     if _table_exists(conn, "manual_review") and not _column_exists(conn, "manual_review", "server_id"):
         conn.execute("ALTER TABLE manual_review RENAME TO manual_review_legacy")
 
+    # control_catalog.remediation_hint: agregado para poder mostrar, por control,
+    # que toca su Set-CIS_WS2025_* al remediar (boton de info en /runs/<id>).
+    if _table_exists(conn, "control_catalog") and not _column_exists(conn, "control_catalog", "remediation_hint"):
+        conn.execute("ALTER TABLE control_catalog ADD COLUMN remediation_hint TEXT")
+
+    # control_catalog.manual_remediation: seccion "Remediation:" oficial de CIS
+    # (UI Path via GPO), para el boton "Como remediarlo a mano" en /runs/<id>.
+    if _table_exists(conn, "control_catalog") and not _column_exists(conn, "control_catalog", "manual_remediation"):
+        conn.execute("ALTER TABLE control_catalog ADD COLUMN manual_remediation TEXT")
+
     conn.commit()
 
 

@@ -1,97 +1,237 @@
 {% extends "base.html" %}
-{% block title %}{{ control_id }} — CIS Dashboard{% endblock %}
+{% block title %}Control {{ control_id }} — VULPS CIS{% endblock %}
 {% block content %}
-<h1>{{ control_id }}</h1>
-{% if catalog %}
-  <p class="subtitle">{{ catalog.title }} — Capitulo {{ catalog.chapter }}
-    {% if catalog.profile_scope and catalog.profile_scope != 'All' %} — <strong>{{ catalog.profile_scope }}</strong>{% endif %}
-    {% if catalog.level %} — <span class="badge" style="background: {{ level_colors.get(catalog.level, '#999') }}">{{ catalog.level }}</span>{% endif %}
-  </p>
-{% elif history %}
-  <p class="subtitle">{{ history[0].title }}</p>
+
+<div class="page-header">
+  <div class="breadcrumb">
+    <a href="{{ url_for('dashboard') }}">Dashboard</a>
+    {% if server %}
+      <span>/</span>
+      <a href="{{ url_for('server_detail', server_id=server.id) }}">{{ server.name }}</a>
+    {% endif %}
+    <span>/</span>
+    <span>Control {{ control_id }}</span>
+  </div>
+  
+  <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px;">
+    <div>
+      <h1>Control CIS {{ control_id }}</h1>
+      {% if catalog %}
+        <p class="subtitle">
+          {{ catalog.title }} — Capítulo {{ catalog.chapter }}
+          {% if catalog.profile_scope and catalog.profile_scope != 'All' %} — Scope: <strong>{{ catalog.profile_scope }}</strong>{% endif %}
+          {% if catalog.level == 'Level 1' %}<span class="badge badge-level1">Level 1</span>
+          {% elif catalog.level == 'Level 2' %}<span class="badge badge-level2">Level 2</span>
+          {% else %}<span class="badge badge-na">{{ catalog.level or "Sin clasificar" }}</span>{% endif %}
+        </p>
+      {% elif history %}
+        <p class="subtitle">{{ history[0].title }}</p>
+      {% endif %}
+    </div>
+
+    {% if server %}
+      <button type="button" class="btn btn-primary" id="open-evaluation-modal">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        Evaluación Manual
+      </button>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Guía de Remediación e Información Técnica del Control -->
+{% if catalog and (catalog.remediation_hint or catalog.manual_remediation) %}
+<div class="charts-grid" style="margin-bottom: 28px;">
+  {% if catalog.remediation_hint %}
+    <div class="panel">
+      <h3 style="color: var(--accent); display: flex; align-items: center; gap: 8px;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        Remediación Automatizada (PowerShell)
+      </h3>
+      <p class="hint" style="margin-bottom: 12px;">{{ catalog.remediation_hint }}</p>
+      <div style="position: relative;">
+        <pre class="modal-code" id="cmd-control-hint">Invoke-CISRemediate -Benchmark WS2025 -ControlId '{{ control_id }}' -WhatIf
+Invoke-CISRemediate -Benchmark WS2025 -ControlId '{{ control_id }}'</pre>
+        <button type="button" class="modal-code-copy" data-target="cmd-control-hint">Copiar</button>
+      </div>
+    </div>
+  {% endif %}
+
+  {% if catalog.manual_remediation %}
+    <div class="panel">
+      <h3 style="color: var(--error); display: flex; align-items: center; gap: 8px;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        Procedimiento Manual Oficial (CIS UI Path)
+      </h3>
+      <div class="modal-manual-body" style="font-size: 0.82rem; max-height: 140px; overflow-y: auto;">
+        {{ catalog.manual_remediation }}
+      </div>
+    </div>
+  {% endif %}
+</div>
 {% endif %}
 
-<section>
-  <h2>Historial de resultados</h2>
-  {% if history %}
-  <table class="data-table">
-    <thead>
-      <tr><th>Servidor</th><th>Importada</th><th>Estado</th><th>Esperado</th><th>Actual</th><th>Notas</th></tr>
-    </thead>
-    <tbody>
-      {% for h in history %}
-      <tr>
-        <td>{{ h.hostname }}{% if not h.server_id %} <span class="small">(sin asignar)</span>{% endif %}</td>
-        <td>{{ h.imported_at }}</td>
-        <td><span class="badge" style="background:{{ status_colors.get(h.status, '#999') }}">{{ h.status }}</span></td>
-        <td class="mono">{{ h.expected_value }}</td>
-        <td class="mono">{{ h.actual_value }}</td>
-        <td>{{ h.notes }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  {% else %}
-    <p class="empty-inline">Este control todavia no aparece en ninguna corrida importada.</p>
-  {% endif %}
-</section>
+{% if server %}
+  <div class="panel" style="margin-bottom: 28px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px;">
+    <div class="flex flex-center gap-3">
+      <div>
+        <div class="small text-muted">Servidor Evaluado</div>
+        <div style="font-size: 1.05rem; font-weight: 700;">{{ server.client_name }} / {{ server.name }}</div>
+      </div>
+    </div>
 
-<section>
-  <h2>Revisión manual</h2>
-  <p class="hint">
-    Es por servidor: el mismo control puede tener una decisión distinta en
-    cada servidor (ej. Print Spooler puede ser "RiskAccepted" en un servidor
-    de impresión y "Compliant" en cualquier otro). Queda guardado
-    independientemente de las corridas de auditoría, no se pisa al
-    reimportar CSVs nuevos.
-  </p>
-
-  {% if server %}
-    <p class="review-server-context">
-      Revisando para: <strong>{{ server.client_name }} / {{ server.name }}</strong>
-      — <a href="{{ url_for('control_detail', control_id=control_id) }}">cambiar de servidor</a>
-    </p>
-
-    {% if review %}
-      <p class="review-current">
-        Estado actual:
-        <span class="badge" style="background:{{ decision_colors.get(review.decision, '#999') }}">{{ review.decision }}</span>
-        — {{ review.reviewer or "sin revisor" }} — {{ review.updated_at }}
-      </p>
-    {% endif %}
-
-    <form method="post" class="review-form">
-      <input type="hidden" name="server_id" value="{{ server_id }}">
-      <label for="decision">Decisión</label>
-      <select name="decision" id="decision">
-        {% for d in decisions %}
-          <option value="{{ d }}" {% if review and review.decision == d %}selected{% endif %}>{{ d }}</option>
-        {% endfor %}
-      </select>
-
-      <label for="reviewer">Revisor</label>
-      <input type="text" name="reviewer" id="reviewer" placeholder="Nombre / usuario" value="{{ review.reviewer if review else '' }}">
-
-      <label for="evidence_notes">Notas / evidencia</label>
-      <textarea name="evidence_notes" id="evidence_notes" rows="4" placeholder="Por que se considera cumplido/no cumplido, referencia a ticket, captura, RSOP, etc.">{{ review.evidence_notes if review else '' }}</textarea>
-
-      <button class="btn" type="submit">Guardar revisión</button>
-    </form>
-  {% else %}
-    <form method="get" class="inline-form">
-      <label for="server_id">Elegí para qué servidor querés revisar este control:</label>
-      <select name="server_id" id="server_id" required>
-        <option value="">Elegí un servidor...</option>
-        {% for s in servers %}
-          <option value="{{ s.id }}">{{ s.client_name }} / {{ s.name }}</option>
-        {% endfor %}
-      </select>
-      <button class="btn btn-sm" type="submit">Continuar</button>
+    <div class="flex flex-center gap-3">
+      <div>
+        <div class="small text-muted">Estado Registrado</div>
+        <div>
+          {% if review %}
+            {% if review.decision == 'Compliant' %}<span class="badge badge-compliant">Compliant</span>
+            {% elif review.decision == 'NonCompliant' %}<span class="badge badge-noncompliant">NonCompliant</span>
+            {% elif review.decision == 'RiskAccepted' %}<span class="badge badge-riskaccepted">RiskAccepted</span>
+            {% else %}<span class="badge badge-pending">Pending</span>{% endif %}
+          {% else %}
+            <span class="badge badge-pending">Sin Evaluación</span>
+          {% endif %}
+        </div>
+      </div>
+      <button type="button" class="btn btn-primary btn-sm" id="open-evaluation-modal-inline">Editar Evaluación</button>
+      <a href="{{ url_for('control_detail', control_id=control_id) }}" class="btn btn-ghost btn-sm">Cambiar Servidor</a>
+    </div>
+  </div>
+{% else %}
+  <div class="panel" style="margin-bottom: 28px; max-width: 540px;">
+    <form method="get" class="form-group" style="margin-bottom: 0;">
+      <label for="server_id" style="margin-bottom: 8px;">Seleccioná un servidor para auditar este control:</label>
+      <div class="flex gap-2">
+        <select name="server_id" id="server_id" required class="form-select" style="flex: 1;">
+          <option value="">Seleccionar servidor...</option>
+          {% for s in servers %}
+            <option value="{{ s.id }}">{{ s.client_name }} / {{ s.name }}</option>
+          {% endfor %}
+        </select>
+        <button class="btn btn-primary" type="submit">Continuar</button>
+      </div>
     </form>
     {% if not servers %}
-      <p class="empty-inline">Todavía no hay servidores creados —
-        <a href="{{ url_for('clients_list') }}">creá uno primero</a>.</p>
+      <p class="empty-inline" style="padding-top: 14px; padding-bottom: 0;">No hay servidores registrados en la plataforma.</p>
     {% endif %}
+  </div>
+{% endif %}
+
+<!-- Histórico de Resultados del Control -->
+<section class="panel">
+  <h2>Histórico de Resultados</h2>
+  <p class="hint" style="margin-bottom: 14px;">Evaluaciones registradas para este control en todas las auditorías del sistema.</p>
+  
+  {% if history %}
+  <div class="table-wrapper">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Servidor</th>
+          <th>Importado</th>
+          <th>Estado</th>
+          <th>Esperado</th>
+          <th>Valor Actual</th>
+          <th>Notas de Auditoría</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for h in history %}
+        <tr>
+          <td><span style="font-weight: 600;">{{ h.hostname }}</span>{% if not h.server_id %} <span class="badge badge-manual">sin asignar</span>{% endif %}</td>
+          <td><span class="mono small">{{ h.imported_at }}</span></td>
+          <td>
+            {% if h.status == 'Pass' %}<span class="badge badge-pass">Pass</span>
+            {% elif h.status == 'Fail' %}<span class="badge badge-fail">Fail</span>
+            {% elif h.status == 'ManualReviewRequired' %}<span class="badge badge-manual">Manual</span>
+            {% elif h.status == 'Error' %}<span class="badge badge-error">Error</span>
+            {% else %}<span class="badge badge-na">N/A</span>{% endif %}
+          </td>
+          <td><span class="mono">{{ h.expected_value }}</span></td>
+          <td><span class="mono" {% if h.status == 'Fail' %}style="color: var(--fail);"{% endif %}>{{ h.actual_value }}</span></td>
+          <td><span class="text-muted small">{{ h.notes }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <div class="panel empty-inline">Este control no ha sido registrado en ninguna auditoría importada.</div>
   {% endif %}
 </section>
+
+<!-- Modal Evaluación Manual del Control -->
+{% if server %}
+<div id="evaluation-modal-overlay" class="modal-overlay" hidden>
+  <div class="modal-box" style="max-width: 580px;">
+    <button type="button" class="modal-close" id="evaluation-modal-close" aria-label="Cerrar">&times;</button>
+    <h3>Evaluación Manual — Control {{ control_id }}</h3>
+    <p class="hint" style="margin-bottom: 18px;">
+      Evaluación para <strong>{{ server.client_name }} / {{ server.name }}</strong>
+    </p>
+
+    <form method="post" data-validate>
+      <input type="hidden" name="server_id" value="{{ server_id }}">
+
+      <div class="form-group">
+        <label for="decision">Decisión de Evaluación *</label>
+        <select name="decision" id="decision" class="form-select">
+          {% for d in decisions %}
+            <option value="{{ d }}" {% if review and review.decision == d %}selected{% endif %}>{{ d }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="reviewer">Auditor / Revisor</label>
+        <input type="text" name="reviewer" id="reviewer" placeholder="ej. jdoe / SecOps Team" value="{{ review.reviewer if review else '' }}">
+      </div>
+
+      <div class="form-group">
+        <label for="evidence_notes">Evidencia / Justificación técnica</label>
+        <textarea name="evidence_notes" id="evidence_notes" rows="4" placeholder="Documentación de la excepción, ticket de referencia, compensación de seguridad o captura de pantalla...">{{ review.evidence_notes if review else '' }}</textarea>
+      </div>
+
+      <div class="flex gap-2" style="justify-content: flex-end; margin-top: 20px;">
+        <button type="button" class="btn btn-ghost" id="evaluation-modal-cancel">Cancelar</button>
+        <button class="btn btn-primary" type="submit">Guardar Evaluación</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const overlay = document.getElementById('evaluation-modal-overlay');
+  const openBtn = document.getElementById('open-evaluation-modal');
+  const openBtnInline = document.getElementById('open-evaluation-modal-inline');
+  const closeBtn = document.getElementById('evaluation-modal-close');
+  const cancelBtn = document.getElementById('evaluation-modal-cancel');
+
+  function openModal() {
+    if (overlay) overlay.hidden = false;
+  }
+
+  function closeModal() {
+    if (overlay) overlay.hidden = true;
+  }
+
+  if (openBtn) openBtn.addEventListener('click', openModal);
+  if (openBtnInline) openBtnInline.addEventListener('click', openModal);
+  if (closeBtn) closeBtn.addEventListener('click', closeModal);
+  if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
+
+  if (overlay) {
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) closeModal();
+    });
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && overlay && !overlay.hidden) closeModal();
+  });
+});
+</script>
+{% endif %}
+
 {% endblock %}
