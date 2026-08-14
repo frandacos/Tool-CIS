@@ -5,9 +5,15 @@ control por control, pensada para ir agregando benchmarks nuevos con el
 tiempo (otras versiones de Windows Server/Client, y a futuro otras
 plataformas) sin tocar el motor común.
 
-Hoy trae un solo benchmark de contenido: **CIS Microsoft Windows Server 2025
-Benchmark v2.0.0** (`CISHarden.WS2025`), contra el checklist canónico de
-`Benchmarks/WS2025/CISHarden.WS2025/inventory/cis2025_controls_master.csv`.
+Hoy trae dos benchmarks de contenido:
+
+- **CIS Microsoft Windows Server 2025 Benchmark v2.0.0** (`CISHarden.WS2025`),
+  contra el checklist canónico de
+  `Benchmarks/WS2025/CISHarden.WS2025/inventory/cis2025_controls_master.csv`.
+- **CIS Debian Linux 10 Benchmark v2.0.0** (`CISHarden.Debian10`) — primer
+  benchmark Unix/Linux del proyecto. Por ahora solo cubre el **Capítulo 1
+  (Initial Setup, 67 controles)**; los capítulos 2-6 (~207 controles más)
+  quedan pendientes. Ver `Benchmarks/Debian10/CISHarden.Debian10/inventory/cis_debian10_controls_master.csv`.
 
 Ver [`SYSTEM_PROMPT.md`](SYSTEM_PROMPT.md) para las reglas de construcción y
 [`PLAN.md`](PLAN.md) para el estado de avance por etapas.
@@ -15,54 +21,90 @@ Ver [`SYSTEM_PROMPT.md`](SYSTEM_PROMPT.md) para las reglas de construcción y
 ## Arquitectura: Core + un módulo por benchmark
 
 - **`CISHarden.Core`**: motor genérico, reutilizable por cualquier
-  benchmark de Windows — registro (`RegistryEngine`), políticas locales vía
-  `secedit` (`Helpers`), `auditpol` (`AuditPolicyEngine`), user rights
-  (`UserRightsEngine`) — más los orquestadores `Invoke-CISAudit` /
-  `Invoke-CISRemediate` y el registro de benchmarks (`Get-CISBenchmarks`).
-  No sabe nada del contenido de ningún benchmark en particular.
-- **`Benchmarks/<Tag>/CISHarden.<Tag>`**: un módulo por benchmark (hoy solo
-  `WS2025`). Contiene sus funciones `Test-CIS_<Tag>_*`/`Set-CIS_<Tag>_*`
-  (una por control), su inventario CSV, y una función
-  `Get-CISBenchmarkInfo_<Tag>` que le dice a Core dónde está el inventario y
-  con qué prefijo nombra sus funciones. `RequiredModules` en su manifest
-  apunta a `CISHarden.Core`.
+  benchmark — más los orquestadores `Invoke-CISAudit` / `Invoke-CISRemediate`
+  y el registro de benchmarks (`Get-CISBenchmarks`). No sabe nada del
+  contenido de ningún benchmark en particular. Trae dos familias de motores
+  de bajo nivel, según la plataforma del benchmark:
+  - **Windows**: registro (`RegistryEngine`), políticas locales vía
+    `secedit` (`Helpers`), `auditpol` (`AuditPolicyEngine`), user rights
+    (`UserRightsEngine`).
+  - **Linux/Unix**: módulos de kernel (`LinuxKernelModuleEngine`), particiones
+    y opciones de montaje vía `findmnt`/fstab (`LinuxFstabEngine`), archivos
+    de configuración/permisos (`LinuxFileEngine`), paquetes `dpkg`/`apt-get`
+    (`LinuxPackageEngine`), servicios `systemd` (`LinuxServiceEngine`),
+    parámetros de kernel vía `sysctl` (`LinuxSysctlEngine`), y una heurística
+    de perfil Server/Workstation (`LinuxHelpers`, `Get-CISLinuxProfile`) —
+    análoga a `Get-CISServerRole` (DC/MS) del lado Windows.
+- **`Benchmarks/<Tag>/CISHarden.<Tag>`**: un módulo por benchmark (hoy
+  `WS2025` y `Debian10`). Contiene sus funciones
+  `Test-CIS_<Tag>_*`/`Set-CIS_<Tag>_*` (una por control), su inventario CSV,
+  y una función `Get-CISBenchmarkInfo_<Tag>` que le dice a Core dónde está
+  el inventario y con qué prefijo nombra sus funciones. `RequiredModules` en
+  su manifest apunta a `CISHarden.Core`.
 - El tag en el nombre de las funciones (`Test-CIS_WS2025_1_1_1`, no
   `Test-CIS_1_1_1`) existe para que dos benchmarks con el mismo `control_id`
-  (ej. "1.1.1" en CIS WS2025 y en un futuro CIS WS2022) puedan convivir
-  cargados en la misma sesión sin pisarse.
+  (ej. "1.1.1" en CIS WS2025 y en CIS Debian10) puedan convivir cargados en
+  la misma sesión sin pisarse.
 
 ### Cómo agregar un benchmark nuevo
 
 1. Crear `Benchmarks/<Tag>/CISHarden.<Tag>/` con la misma forma que
-   `Benchmarks/WS2025/CISHarden.WS2025/` (`Private/` con los controles,
-   `Public/Get-CISBenchmarkInfo_<Tag>.ps1`, `inventory/`, `Tests/`,
-   manifest + loader).
+   `Benchmarks/WS2025/CISHarden.WS2025/` o `Benchmarks/Debian10/CISHarden.Debian10/`
+   (`Private/` con los controles, `Public/Get-CISBenchmarkInfo_<Tag>.ps1`,
+   `inventory/`, `Tests/`, manifest + loader).
 2. Nombrar todas las funciones `Test-CIS_<Tag>_*`/`Set-CIS_<Tag>_*` y
    exportarlas junto con `Get-CISBenchmarkInfo_<Tag>` desde el `.psm1`.
 3. `RequiredModules = @('CISHarden.Core')` en el `.psd1` del benchmark.
-4. Si el benchmark es de otra plataforma (Linux, Azure, etc.), los motores
-   de `CISHarden.Core` (registro/secedit/auditpol, todos exclusivos de
-   Windows) no sirven — hay que evaluar aparte qué motores nuevos hacen
-   falta antes de escribir el contenido del benchmark.
+4. Si la plataforma del benchmark ya tiene motores en
+   `CISHarden.Core/Public/Engines/` (Windows o Linux/Unix, ver arriba),
+   reutilizalos. Si es una plataforma nueva (Azure, macOS, etc.), hay que
+   evaluar aparte qué motores nuevos hacen falta antes de escribir el
+   contenido del benchmark, siguiendo el mismo patrón (funciones
+   `Test-CIS*`/`Get-CIS*`/`Set-CIS*` agnósticas de benchmark, agregadas a
+   `CISHarden.Core/Public/Engines/` y exportadas desde el `.psd1`/`.psm1`
+   de Core).
 
-No hace falta tocar `CISHarden.Core` para agregar un benchmark nuevo de
-Windows: solo se importa el módulo nuevo y se lo referencia por `-Benchmark`.
+No hace falta tocar `CISHarden.Core` para agregar un benchmark nuevo cuya
+plataforma ya tenga motores (Windows o Linux/Unix): solo se importa el
+módulo nuevo y se lo referencia por `-Benchmark`.
 
 ## Requisitos
+
+### Para CISHarden.WS2025 (Windows)
 
 - **Windows Server 2025** (o Windows 10/11 con PowerShell 5.1+ para testear
   lógica, aunque varios controles solo tienen sentido en un Server real).
 - **PowerShell 5.1** o superior (Windows PowerShell o `pwsh`/PowerShell 7).
 - Ejecutarse **como Administrador** — `secedit`, el registro de HKLM y los
   cambios de política local requieren privilegios elevados.
-- **[Pester](https://pester.dev/)** si querés correr los tests (`Install-Module Pester -Force -SkipPublisherCheck`).
 - Nada de esto corre de verdad en macOS/Linux: `secedit`, `auditpol`, `reg.exe`,
   `Get-Service`, el registro `HKLM:\...`, etc. son exclusivos de Windows.
   Este repo se editó en Mac, pero **hay que copiarlo/clonarlo a un servidor
-  o VM Windows para ejecutarlo de verdad.** Los tests de Pester que dependen
-  de esas herramientas están mockeados y corren igual en cualquier SO
-  (algunos casos de borde puntuales de Cap. 5/9/19 sí necesitan Windows real
-  incluso mockeados, por cmdlets que no existen fuera de Windows).
+  o VM Windows para ejecutarlo de verdad.**
+
+### Para CISHarden.Debian10 (Linux/Unix)
+
+- **Debian 10** real (o cualquier Linux con `systemd`/`dpkg`/`apt` para
+  testear lógica — los `Test-CIS_Debian10_*` llaman `modprobe`, `lsmod`,
+  `findmnt`, `dpkg-query`, `systemctl`, `sysctl`, `stat`, `dconf`, etc., que
+  no existen en macOS/Windows).
+- **PowerShell 7+ (`pwsh`)** — es multiplataforma y corre nativo en Debian
+  (`apt install powershell` o el paquete `.deb` de Microsoft).
+- Ejecutarse como **root** (o con `sudo`) — leer `/etc/shadow`, editar
+  `/etc/fstab`, `/etc/modprobe.d/`, `/etc/sysctl.d/`, instalar paquetes, etc.
+  requieren privilegios elevados.
+- Por ahora solo cubre el Capítulo 1 del benchmark (67 de ~274 controles) —
+  ver "Estado actual" mas abajo.
+
+### Para ambos
+
+- **[Pester](https://pester.dev/)** si querés correr los tests (`Install-Module Pester -Force -SkipPublisherCheck`).
+  Los tests mockean los motores de Core (registro/secedit en Windows,
+  modprobe/systemctl/dconf/etc. en Linux), así que corren en cualquier SO
+  con PowerShell — no necesitan un servidor real hardening-eado. Esto valida
+  la **lógica** de cada `Test-CIS_*`; la validación real (que el cambio
+  efectivamente aplique y persista) se hace contra un servidor/VM real de la
+  plataforma correspondiente.
 
 ## Cómo importar los módulos
 
@@ -124,6 +166,22 @@ están implementados).
 ```powershell
 $resultado = Invoke-CISAudit -Benchmark WS2025
 $resultado | Group-Object Status | Select Name, Count
+```
+
+### Ejemplo equivalente con Debian10 (Linux)
+
+Desde una sesión de `pwsh` como root, parado en `Script-CIS`:
+
+```powershell
+Import-Module ./CISHarden.Core/CISHarden.Core.psd1 -Force
+Import-Module ./Benchmarks/Debian10/CISHarden.Debian10/CISHarden.Debian10.psd1 -Force
+
+# Los 67 controles del Capitulo 1 (unico implementado por ahora)
+Invoke-CISAudit -Benchmark Debian10 -Chapter 1 -ReportCoverage
+
+# Remediar en seco primero, despues de verdad
+Invoke-CISRemediate -Benchmark Debian10 -Chapter 1 -WhatIf
+Invoke-CISRemediate -Benchmark Debian10 -Chapter 1
 ```
 
 ## Remediar (hace cambios reales en el servidor)
@@ -227,6 +285,16 @@ validación real (que el cambio efectivamente aplique y persista) se hace en
 el server de laboratorio siguiendo el procedimiento de `PLAN.md`
 ("Cómo se valida cada control a medida que se avanza").
 
+Para `CISHarden.Debian10` (corre igual en cualquier SO con `pwsh`+Pester,
+mockeando los motores Linux de Core en vez de invocar Debian real):
+
+```powershell
+Import-Module ./CISHarden.Core/CISHarden.Core.psd1 -Force
+Import-Module ./Benchmarks/Debian10/CISHarden.Debian10/CISHarden.Debian10.psd1 -Force
+
+Invoke-Pester ./Benchmarks/Debian10/CISHarden.Debian10/Tests/ -Output Detailed
+```
+
 ## Estructura
 
 ```
@@ -237,10 +305,17 @@ CISHarden.Core/
     Invoke-CISRemediate.ps1                  # orquestador de remediacion (-Benchmark, generico)
     BenchmarkRegistry.ps1                    # Get-CISBenchmarks / Resolve-CISBenchmarkModule / Get-CISBenchmarkInfo
     Engines/
-      Helpers.ps1                             # rol DC/MS, secedit System Access, backups
-      UserRightsEngine.ps1                    # motor de Privilege Rights (secedit)
-      RegistryEngine.ps1                      # motor generico de valores de registro
-      AuditPolicyEngine.ps1                   # motor de auditpol (Advanced Audit)
+      Helpers.ps1                             # rol DC/MS, secedit System Access, backups (Windows)
+      UserRightsEngine.ps1                    # motor de Privilege Rights via secedit (Windows)
+      RegistryEngine.ps1                      # motor generico de valores de registro (Windows)
+      AuditPolicyEngine.ps1                   # motor de auditpol / Advanced Audit (Windows)
+      LinuxHelpers.ps1                        # perfil Server/Workstation, wrapper de bash (Linux)
+      LinuxKernelModuleEngine.ps1             # modulos de kernel: modprobe/lsmod/blacklist (Linux)
+      LinuxFstabEngine.ps1                    # particiones y opciones de montaje: findmnt/fstab (Linux)
+      LinuxFileEngine.ps1                     # contenido/permisos/owner de archivos (Linux)
+      LinuxPackageEngine.ps1                  # paquetes dpkg/apt-get (Linux)
+      LinuxServiceEngine.ps1                  # servicios systemd (Linux)
+      LinuxSysctlEngine.ps1                   # parametros de kernel via sysctl (Linux)
   Tests/
     InvokeCISRemediate.Tests.ps1              # tests del orquestador con un benchmark ficticio
   Reports/
@@ -268,6 +343,23 @@ Benchmarks/
       inventory/
         cis2025_controls_master.csv           # checklist canonico de los 454 controles
         parse_toc.py                          # script que genero el inventario
+  Debian10/
+    cis_debian_10.md                          # benchmark original (fuente), UTF-16LE/CRLF
+    CISHarden.Debian10/
+      CISHarden.Debian10.psd1 / .psm1         # manifest + loader (RequiredModules: CISHarden.Core)
+      Private/
+        Chapter1a-FilesystemConfiguration.ps1 # 1.1.x — 34 controles (modulos, particiones, mount options)
+        Chapter1b-SoftwareUpdatesAndAIDE.ps1  # 1.2.x-1.3.x — 5 controles (AIDE, updates/repos/GPG)
+        Chapter1c-BootAndProcessHardening.ps1 # 1.4.x-1.5.x — 8 controles (bootloader, ASLR, core dumps)
+        Chapter1d-MACBannersAndGDM.ps1        # 1.6.x-1.8.x — 20 controles (AppArmor, banners, GDM)
+      Public/
+        Get-CISBenchmarkInfo_Debian10.ps1     # metadata que Core usa para orquestar este benchmark
+      Tests/
+        Chapter1*.Tests.ps1, Coverage.Tests.ps1  # Pester, uno por bloque + cobertura del inventario
+      inventory/
+        cis_debian10_controls_master.csv      # checklist canonico (67 controles del Cap. 1 por ahora)
+        cis_debian_10_utf8.md                 # benchmark convertido a UTF-8 (paso previo al parseo)
+        parse_toc.py / parse_levels.py / build_master_csv.py  # scripts que generaron el inventario
 SYSTEM_PROMPT.md                # contrato/reglas de construccion
 PLAN.md                         # plan por etapas, estado de avance y bugs encontrados/corregidos
 ```
@@ -291,3 +383,16 @@ Lo que falta para cerrar la Etapa 8 (consolidación final, ver `PLAN.md`):
 un reporte HTML (hoy el orquestador ya exporta CSV); y el ciclo completo de
 remediación (`Set-CIS_WS2025_*` → re-audit → restaurar backup) probado en
 una muestra de controles por capítulo antes de marcar `status_validated`.
+
+**CIS Debian10 arrancó con el Capítulo 1 (Initial Setup) como piloto: 67/67
+controles tienen `Test-CIS_Debian10_*`/`Set-CIS_Debian10_*` implementados**,
+`Invoke-CISAudit -Benchmark Debian10 -ReportCoverage` confirma cobertura
+completa del inventario, y los 68 tests de Pester (67 controles + cobertura)
+pasan mockeando los motores Linux de Core. Esto se armó y probó en macOS —
+**no se validó todavía contra una Debian 10 real** (correr
+`Invoke-CISAudit`/`-Remediate` en una VM/servidor real de Debian 10 como
+root es el próximo paso antes de marcar `status_validated`). Los capítulos
+2 (Services), 3 (Network Configuration), 4 (Access/Auth/Authorization), 5
+(Logging and Auditing) y 6 (System Maintenance) — unos ~207 controles más —
+quedan pendientes para etapas siguientes, siguiendo el mismo patrón
+(inventario CSV → motores nuevos si hacen falta → `Test-*`/`Set-*` → Pester).

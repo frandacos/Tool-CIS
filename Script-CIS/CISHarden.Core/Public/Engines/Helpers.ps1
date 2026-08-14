@@ -34,7 +34,7 @@ function New-CISResult {
         ExpectedValue = $ExpectedValue
         ActualValue   = $ActualValue
         Notes         = $Notes
-        Hostname      = $env:COMPUTERNAME
+        Hostname      = if ($env:COMPUTERNAME) { $env:COMPUTERNAME } else { [System.Net.Dns]::GetHostName() }
         Timestamp     = (Get-Date).ToString('o')
     }
 }
