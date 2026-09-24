@@ -18,11 +18,13 @@ CREATE TABLE IF NOT EXISTS server (
     hostname TEXT,
     criticality TEXT NOT NULL DEFAULT 'Medium',
     description TEXT,
+    benchmark TEXT NOT NULL DEFAULT 'WS2025',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_server_client ON server(client_id);
 
--- Catalogo canonico de controles (importado desde cis2025_controls_master.csv)
+-- Catalogo canonico de controles por benchmark (importado desde cis2025_controls_master.csv,
+-- cis_debian13_controls_master.csv, ...). PK (benchmark, control_id): los IDs se repiten entre benchmarks.
 -- remediation_hint: resumen de que toca Set-CIS_WS2025_<control_id> al remediar
 -- (clave de registro, politica local, user right, etc.), generado por
 -- Script-CIS/.../inventory/gen_remediation_hints.py e importado desde
@@ -33,14 +35,16 @@ CREATE INDEX IF NOT EXISTS idx_server_client ON server(client_id);
 -- e importada desde manual_remediation.csv -- el procedimiento manual, sin
 -- pasar por el Set-CIS_WS2025_* de CISHarden.
 CREATE TABLE IF NOT EXISTS control_catalog (
-    control_id TEXT PRIMARY KEY,
+    benchmark TEXT NOT NULL DEFAULT 'WS2025',
+    control_id TEXT NOT NULL,
     title TEXT NOT NULL,
     chapter TEXT NOT NULL,
     profile_scope TEXT,
     level TEXT,
     page TEXT,
     remediation_hint TEXT,
-    manual_remediation TEXT
+    manual_remediation TEXT,
+    PRIMARY KEY (benchmark, control_id)
 );
 
 -- Una fila por cada archivo de auditoria importado (una corrida de Invoke-CISAudit).
@@ -54,6 +58,7 @@ CREATE TABLE IF NOT EXISTS audit_run (
     hostname TEXT NOT NULL,
     source_filename TEXT,
     label TEXT,
+    benchmark TEXT NOT NULL DEFAULT 'WS2025',
     imported_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

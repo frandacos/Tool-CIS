@@ -104,3 +104,31 @@ function Set-CISFileOwner {
         & chown $Owner $Path
     }
 }
+
+function Test-CISPathAccess {
+    <#
+        Verifica que <Path> tenga el owner esperado y un modo IGUAL O MAS
+        RESTRICTIVO que <MaxMode> ("0755 or more restrictive" del benchmark):
+        cumple si no tiene ningun bit fuera de MaxMode. Path inexistente ->
+        Exists=$false, Compliant=$true (nada que proteger).
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][string]$MaxMode,
+        [string[]]$Owner = 'root:root'   # uno o varios owner:group aceptados
+    )
+    $mode = Get-CISFileMode -Path $Path
+    if ($null -eq $mode) {
+        return [pscustomobject]@{ Path = $Path; Exists = $false; Compliant = $true; Mode = $null; Owner = $null }
+    }
+    $own = Get-CISFileOwner -Path $Path
+    $extraBits = [Convert]::ToInt32($mode, 8) -band (-bnot [Convert]::ToInt32($MaxMode, 8))
+    [pscustomobject]@{
+        Path      = $Path
+        Exists    = $true
+        Compliant = ($extraBits -eq 0) -and ($Owner -contains $own)
+        Mode      = $mode
+        Owner     = $own
+    }
+}

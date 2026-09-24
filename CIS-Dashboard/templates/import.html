@@ -64,6 +64,16 @@
     </div>
 
     <div class="form-group">
+      <label for="benchmark">Benchmark (solo para catálogo y guías de remediación)</label>
+      <select name="benchmark" id="benchmark" class="form-select">
+        {% for key, b in benchmarks.items() %}
+          <option value="{{ key }}" {% if key == default_benchmark %}selected{% endif %}>{{ b.name }}</option>
+        {% endfor %}
+      </select>
+      <p class="field-hint" style="margin-top: 4px;">Las corridas de auditoría toman el benchmark del servidor elegido. Catálogo Debian 13: <code>cis_debian13_controls_master.csv</code>.</p>
+    </div>
+
+    <div class="form-group">
       <label for="server_id">Servidor de Destino (Solo para corridas de auditoría)</label>
       <select name="server_id" id="server_id" class="form-select">
         <option value="">— No aplica / Importación de Catálogo o Guías —</option>

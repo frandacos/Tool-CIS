@@ -15,14 +15,19 @@ function Test-CISKernelModuleDisabled {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][string]$Module,
-        [ValidateSet('fs', 'drivers', 'net')][string]$Type = 'fs'
+        [ValidateSet('fs', 'drivers', 'net')][string]$Type = 'fs',
+        # Directorio del modulo bajo kernel/<Type>/ cuando no coincide con el nombre
+        # (Debian 13: overlay -> 'overlayfs', firewire-core -> 'firewire').
+        [string]$DirName
     )
 
     $probeName = $Module -replace '-', '_'
-    $dirName = $Module -replace '-', '/'
+    if (-not $DirName) { $DirName = $Module -replace '-', '/' }
     $kernelRelease = (& uname -r).Trim()
-    $moduleDir = "/lib/modules/$kernelRelease/kernel/$Type/$dirName"
-    $existsInRunningKernel = Test-Path -Path $moduleDir
+    $moduleDir = "/lib/modules/$kernelRelease/kernel/$Type/$DirName"
+    # El benchmark (Debian 13) exige que el directorio exista Y no este vacio.
+    $existsInRunningKernel = (Test-Path -Path $moduleDir) -and
+        ($null -ne (Get-ChildItem -Path $moduleDir -Force -ErrorAction SilentlyContinue | Select-Object -First 1))
 
     $isLoadable = $false
     $isLoaded = $false
@@ -30,7 +35,7 @@ function Test-CISKernelModuleDisabled {
         $loadableRaw = (& modprobe -n -v $Module 2>$null) -join "`n"
         # "install /bin/true" o "install /bin/false" en la salida de modprobe -n -v
         # significa que el modulo esta explicitamente deshabilitado.
-        $isLoadable = -not [bool]($loadableRaw -match 'install\s+/bin/(true|false)')
+        $isLoadable = -not [bool]($loadableRaw -match 'install\s+(/usr)?/bin/(true|false)')
 
         $loadedRaw = (& lsmod 2>$null) -join "`n"
         $isLoaded = [bool]($loadedRaw -match "(?m)^$([regex]::Escape($probeName))\s")

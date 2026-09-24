@@ -7,6 +7,25 @@ revisión de los controles `ManualReviewRequired`, organizados por
 separado de `Tool-CIS`: este repo **no ejecuta PowerShell ni toca los
 servidores**, solo lee los CSV que `Invoke-CISAudit` exporta.
 
+## Multi-benchmark (v3)
+
+El Dashboard maneja **varios benchmarks a la vez** (hoy `WS2025`, `Debian13` y `Debian10`;
+se agregan en `BENCHMARKS` de `app.py`). Los `control_id` se repiten entre benchmarks
+(`1.1.1` existe en todos), así que:
+
+- el catálogo se guarda por `(benchmark, control_id)`; al importar un catálogo
+  (`cis_debian13_controls_master.csv`, `cis2025_controls_master.csv`, ...) elegís a qué
+  benchmark pertenece en **Importar**;
+- cada **servidor** tiene su benchmark (se elige al crearlo/editarlo en el cliente) y sus
+  corridas se importan con ese benchmark; una corrida solo se puede asignar a un servidor del
+  mismo benchmark;
+- las bases existentes se migran solas al arrancar (backup previo en `backups/`): todo lo
+  cargado antes queda como `WS2025` y no se pierde nada.
+
+Para Debian 13: importá `Script-CIS/Benchmarks/Debian13/CISHarden.Debian13/inventory/cis_debian13_controls_master.csv`
+como catálogo `Debian13`, creá el servidor con benchmark Debian13 y subí el CSV de
+`Invoke-CISAudit -Benchmark Debian13 -OutputPath ...`.
+
 ## Qué hace hoy (v2)
 
 - **Clientes y servidores**: creá clientes, y bajo cada uno los servidores

@@ -71,6 +71,42 @@ def _migrate(conn):
     if _table_exists(conn, "control_catalog") and not _column_exists(conn, "control_catalog", "manual_remediation"):
         conn.execute("ALTER TABLE control_catalog ADD COLUMN manual_remediation TEXT")
 
+    # --- Multi-benchmark (WS2025, Debian10, Debian13, ...) ---
+    # Los control_id se repiten entre benchmarks ("1.1.1" existe en todos), asi que
+    # el catalogo pasa a tener PK (benchmark, control_id) y cada servidor / corrida
+    # recuerda a que benchmark pertenece. Todo lo existente queda como 'WS2025'.
+    for table in ("server", "audit_run"):
+        if _table_exists(conn, table) and not _column_exists(conn, table, "benchmark"):
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN benchmark TEXT NOT NULL DEFAULT 'WS2025'")
+
+    if _table_exists(conn, "control_catalog") and not _column_exists(conn, "control_catalog", "benchmark"):
+        conn.execute("ALTER TABLE control_catalog RENAME TO control_catalog_old")
+        conn.execute(
+            """
+            CREATE TABLE control_catalog (
+                benchmark TEXT NOT NULL DEFAULT 'WS2025',
+                control_id TEXT NOT NULL,
+                title TEXT NOT NULL,
+                chapter TEXT NOT NULL,
+                profile_scope TEXT,
+                level TEXT,
+                page TEXT,
+                remediation_hint TEXT,
+                manual_remediation TEXT,
+                PRIMARY KEY (benchmark, control_id)
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO control_catalog
+                (benchmark, control_id, title, chapter, profile_scope, level, page, remediation_hint, manual_remediation)
+            SELECT 'WS2025', control_id, title, chapter, profile_scope, level, page, remediation_hint, manual_remediation
+            FROM control_catalog_old
+            """
+        )
+        conn.execute("DROP TABLE control_catalog_old")
+
     conn.commit()
 
 

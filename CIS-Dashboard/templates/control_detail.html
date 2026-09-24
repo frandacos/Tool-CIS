@@ -94,7 +94,7 @@ Invoke-CISRemediate -Benchmark WS2025 -ControlId '{{ control_id }}'</pre>
         </div>
       </div>
       <button type="button" class="btn btn-primary btn-sm" id="open-evaluation-modal-inline">Editar Evaluación</button>
-      <a href="{{ url_for('control_detail', control_id=control_id) }}" class="btn btn-ghost btn-sm">Cambiar Servidor</a>
+      <a href="{{ url_for('control_detail', control_id=control_id, benchmark=benchmark) }}" class="btn btn-ghost btn-sm">Cambiar Servidor</a>
     </div>
   </div>
 {% else %}

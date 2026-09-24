@@ -129,7 +129,7 @@
       {% for r in results %}
       <tr>
         <td><span class="mono">{{ r.chapter }}</span></td>
-        <td><a class="mono" style="font-weight: 600;" href="{{ url_for('control_detail', control_id=r.control_id, server_id=run.server_id) }}">{{ r.control_id }}</a></td>
+        <td><a class="mono" style="font-weight: 600;" href="{{ url_for('control_detail', control_id=r.control_id, server_id=run.server_id, benchmark=run.benchmark) }}">{{ r.control_id }}</a></td>
         <td><div class="truncate" style="max-width: 320px;" title="{{ r.title }}">{{ r.title }}</div></td>
         <td>
           {% if r.level == 'Level 1' %}<span class="badge badge-level1">L1</span>

@@ -38,6 +38,42 @@ CHAPTER_TITLES = {
     "18": "Administrative Templates (Computer)",
     "19": "Administrative Templates (User)",
 }
+# Benchmarks soportados: nombre visible, niveles y titulos de capitulo. Un benchmark
+# nuevo se agrega aca (los control_id se importan con su catalogo CSV).
+DEFAULT_BENCHMARK = "WS2025"
+BENCHMARKS = {
+    "WS2025": {
+        "name": "Windows Server 2025 (CIS v2.0.0)",
+        "levels": LEVELS,
+        "chapters": CHAPTER_TITLES,
+    },
+    "Debian13": {
+        "name": "Debian Linux 13 (CIS v1.0.0)",
+        "levels": ["Level 1", "Level 2"],
+        "chapters": {
+            "1": "Initial Setup", "2": "Services", "3": "Network", "4": "Host Based Firewall",
+            "5": "Access Control", "6": "Logging and Auditing", "7": "System Maintenance",
+        },
+    },
+    "Debian10": {
+        "name": "Debian Linux 10 (CIS v2.0.0)",
+        "levels": ["Level 1", "Level 2"],
+        "chapters": {
+            "1": "Initial Setup", "2": "Services", "3": "Network Configuration",
+            "4": "Logging and Auditing", "5": "Access, Authentication and Authorization", "6": "System Maintenance",
+        },
+    },
+}
+
+
+def benchmark_of(value):
+    return value if value in BENCHMARKS else DEFAULT_BENCHMARK
+
+
+def chapter_titles_for(benchmark):
+    return BENCHMARKS[benchmark_of(benchmark)]["chapters"]
+
+
 DECISIONS = ["Pending", "Compliant", "NonCompliant", "RiskAccepted"]
 DECISION_COLORS = {
     "Pending": "#ef6c00",
@@ -135,7 +171,7 @@ def run_chapter_breakdown(conn, run_id):
         """
         SELECT COALESCE(cc.chapter, '?') AS chapter, cr.status, COUNT(*) AS n
         FROM control_result cr
-        LEFT JOIN control_catalog cc ON cc.control_id = cr.control_id
+        LEFT JOIN control_catalog cc ON cc.control_id = cr.control_id AND cc.benchmark = (SELECT ar_b.benchmark FROM audit_run ar_b WHERE ar_b.id = cr.run_id)
         WHERE cr.run_id = ?
         GROUP BY chapter, cr.status
         """,
@@ -160,7 +196,7 @@ def run_level_breakdown(conn, run_id):
         """
         SELECT COALESCE(cc.level, 'Sin clasificar') AS level, cr.status, COUNT(*) AS n
         FROM control_result cr
-        LEFT JOIN control_catalog cc ON cc.control_id = cr.control_id
+        LEFT JOIN control_catalog cc ON cc.control_id = cr.control_id AND cc.benchmark = (SELECT ar_b.benchmark FROM audit_run ar_b WHERE ar_b.id = cr.run_id)
         WHERE cr.run_id = ?
         GROUP BY level, cr.status
         """,
@@ -279,7 +315,7 @@ def dashboard():
             SELECT cr.control_id, cr.title, cr.expected_value, cr.actual_value,
                    COALESCE(cc.chapter, '?') AS chapter, cc.level AS level
             FROM control_result cr
-            LEFT JOIN control_catalog cc ON cc.control_id = cr.control_id
+            LEFT JOIN control_catalog cc ON cc.control_id = cr.control_id AND cc.benchmark = (SELECT ar_b.benchmark FROM audit_run ar_b WHERE ar_b.id = cr.run_id)
             WHERE cr.run_id = ? AND cr.status = 'Fail'
             ORDER BY cr.control_id
             """,
@@ -317,7 +353,8 @@ def dashboard():
         fail_controls=fail_controls,
         manual_pending=manual_pending,
         status_colors=STATUS_COLORS,
-        chapter_titles=CHAPTER_TITLES,
+        chapter_titles=chapter_titles_for(selected_run["benchmark"] if selected_run else None),
+        benchmarks=BENCHMARKS,
         level_colors=LEVEL_COLORS,
         level_hints=LEVEL_HINTS,
         catalog_count=catalog_count,
@@ -371,6 +408,7 @@ def client_detail(client_id):
         hostname = request.form.get("hostname", "").strip()
         criticality = request.form.get("criticality", "Medium")
         description = request.form.get("description", "").strip()
+        benchmark = benchmark_of(request.form.get("benchmark", DEFAULT_BENCHMARK))
         if not name:
             flash("El servidor necesita un nombre.", "error")
         else:
@@ -378,10 +416,10 @@ def client_detail(client_id):
                 criticality = "Medium"
             conn.execute(
                 """
-                INSERT INTO server (client_id, name, hostname, criticality, description)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO server (client_id, name, hostname, criticality, description, benchmark)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (client_id, name, hostname or None, criticality, description or None),
+                (client_id, name, hostname or None, criticality, description or None, benchmark),
             )
             conn.commit()
             flash(f"Servidor '{name}' agregado.", "success")
@@ -413,6 +451,7 @@ def client_detail(client_id):
         criticality_levels=CRITICALITY_LEVELS,
         criticality_colors=CRITICALITY_COLORS,
         status_colors=STATUS_COLORS,
+        benchmarks=BENCHMARKS,
     )
 
 @app.route("/clients/<int:client_id>/edit", methods=["POST"])
@@ -468,6 +507,7 @@ def edit_server(server_id):
     hostname = request.form.get("hostname", "").strip()
     criticality = request.form.get("criticality", "Medium")
     description = request.form.get("description", "").strip()
+    benchmark = benchmark_of(request.form.get("benchmark", server["benchmark"]))
 
     if not name:
         flash("El servidor necesita un nombre.", "error")
@@ -477,11 +517,14 @@ def edit_server(server_id):
         conn.execute(
             """
             UPDATE server
-            SET name = ?, hostname = ?, criticality = ?, description = ?
+            SET name = ?, hostname = ?, criticality = ?, description = ?, benchmark = ?
             WHERE id = ?
             """,
-            (name, hostname or None, criticality, description or None, server_id),
+            (name, hostname or None, criticality, description or None, benchmark, server_id),
         )
+        if benchmark != server["benchmark"]:
+            # las corridas ya importadas conservan el benchmark con el que se auditaron
+            flash("Cambiaste el benchmark del servidor: las corridas anteriores conservan el suyo; las nuevas se importaran con el nuevo.", "success")
         conn.commit()
         flash(f"Servidor '{name}' actualizado.", "success")
     conn.close()
@@ -553,7 +596,7 @@ def server_detail(server_id):
                    cc.remediation_hint AS remediation_hint,
                    cc.manual_remediation AS manual_remediation
             FROM control_result cr
-            LEFT JOIN control_catalog cc ON cc.control_id = cr.control_id
+            LEFT JOIN control_catalog cc ON cc.control_id = cr.control_id AND cc.benchmark = (SELECT ar_b.benchmark FROM audit_run ar_b WHERE ar_b.id = cr.run_id)
             WHERE cr.run_id = ? AND cr.status = 'Fail'
             ORDER BY cr.control_id
             """,
@@ -575,7 +618,8 @@ def server_detail(server_id):
         reviews_map=reviews_map,
         criticality_colors=CRITICALITY_COLORS,
         status_colors=STATUS_COLORS,
-        chapter_titles=CHAPTER_TITLES,
+        chapter_titles=chapter_titles_for(server["benchmark"]),
+        benchmarks=BENCHMARKS,
     )
 
 
@@ -631,7 +675,7 @@ def run_detail(run_id):
                cc.remediation_hint AS remediation_hint,
                cc.manual_remediation AS manual_remediation
         FROM control_result cr
-        LEFT JOIN control_catalog cc ON cc.control_id = cr.control_id
+        LEFT JOIN control_catalog cc ON cc.control_id = cr.control_id AND cc.benchmark = (SELECT ar_b.benchmark FROM audit_run ar_b WHERE ar_b.id = cr.run_id)
         WHERE cr.run_id = ?
     """
     params = [run_id]
@@ -654,7 +698,7 @@ def run_detail(run_id):
         """
         SELECT DISTINCT COALESCE(cc.chapter, '?') AS chapter
         FROM control_result cr
-        LEFT JOIN control_catalog cc ON cc.control_id = cr.control_id
+        LEFT JOIN control_catalog cc ON cc.control_id = cr.control_id AND cc.benchmark = (SELECT ar_b.benchmark FROM audit_run ar_b WHERE ar_b.id = cr.run_id)
         WHERE cr.run_id = ?
         """,
         (run_id,),
@@ -663,6 +707,11 @@ def run_detail(run_id):
 
     counts = run_status_counts(conn, run_id)
     clients_tree = get_clients_with_servers(conn) if run["server_id"] is None else []
+    clients_tree = [
+        {"client": g["client"], "servers": [sv for sv in g["servers"] if sv["benchmark"] == run["benchmark"]]}
+        for g in clients_tree
+    ]
+    clients_tree = [g for g in clients_tree if g["servers"]]
     conn.close()
 
     return render_template(
@@ -674,7 +723,8 @@ def run_detail(run_id):
         status_filter=status_filter,
         chapter_filter=chapter_filter,
         level_filter=level_filter,
-        levels=LEVELS,
+        levels=BENCHMARKS[benchmark_of(run["benchmark"])]["levels"],
+        benchmarks=BENCHMARKS,
         search=search,
         status_colors=STATUS_COLORS,
         clients_tree=clients_tree,
@@ -693,6 +743,11 @@ def assign_run_server(run_id):
     if not server_id:
         conn.close()
         flash("Elegi un servidor para asignar esta corrida.", "error")
+        return redirect(url_for("run_detail", run_id=run_id))
+    server = conn.execute("SELECT * FROM server WHERE id = ?", (server_id,)).fetchone()
+    if server is None or server["benchmark"] != run["benchmark"]:
+        conn.close()
+        flash(f"Esa corrida se auditó con el benchmark {run['benchmark']}; elegí un servidor con el mismo benchmark.", "error")
         return redirect(url_for("run_detail", run_id=run_id))
     conn.execute("UPDATE audit_run SET server_id = ? WHERE id = ?", (server_id, run_id))
     conn.commit()
@@ -738,56 +793,56 @@ def _sniff_csv_kind(header):
     return None
 
 
-def _import_catalog(conn, reader):
+def _import_catalog(conn, reader, benchmark):
     n = 0
     for row in reader:
         conn.execute(
             """
-            INSERT INTO control_catalog (control_id, title, chapter, profile_scope, level, page)
-            VALUES (?, ?, ?, ?, ?, ?)
-            ON CONFLICT(control_id) DO UPDATE SET
+            INSERT INTO control_catalog (benchmark, control_id, title, chapter, profile_scope, level, page)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(benchmark, control_id) DO UPDATE SET
                 title = excluded.title,
                 chapter = excluded.chapter,
                 profile_scope = excluded.profile_scope,
                 level = excluded.level,
                 page = excluded.page
             """,
-            (row["control_id"], row["title"], row["chapter"], row.get("profile_scope"), row.get("level"), row.get("page")),
+            (benchmark, row["control_id"], row["title"], row["chapter"], row.get("profile_scope"), row.get("level"), row.get("page")),
         )
         n += 1
     return n
 
 
-def _import_remediation_hints(conn, reader):
+def _import_remediation_hints(conn, reader, benchmark):
     n = 0
     for row in reader:
         conn.execute(
-            "UPDATE control_catalog SET remediation_hint = ? WHERE control_id = ?",
-            (row["remediation_hint"], row["control_id"]),
+            "UPDATE control_catalog SET remediation_hint = ? WHERE control_id = ? AND benchmark = ?",
+            (row["remediation_hint"], row["control_id"], benchmark),
         )
         n += 1
     return n
 
 
-def _import_manual_remediation(conn, reader):
+def _import_manual_remediation(conn, reader, benchmark):
     n = 0
     for row in reader:
         conn.execute(
-            "UPDATE control_catalog SET manual_remediation = ? WHERE control_id = ?",
-            (row["manual_remediation"], row["control_id"]),
+            "UPDATE control_catalog SET manual_remediation = ? WHERE control_id = ? AND benchmark = ?",
+            (row["manual_remediation"], row["control_id"], benchmark),
         )
         n += 1
     return n
 
 
-def _import_audit_run(conn, reader, filename, label, server_id):
+def _import_audit_run(conn, reader, filename, label, server_id, benchmark):
     rows = list(reader)
     if not rows:
         return None, 0
     hostname = rows[0].get("Hostname") or rows[0].get("hostname") or "desconocido"
     cur = conn.execute(
-        "INSERT INTO audit_run (server_id, hostname, source_filename, label) VALUES (?, ?, ?, ?)",
-        (server_id, hostname, filename, label or None),
+        "INSERT INTO audit_run (server_id, hostname, source_filename, label, benchmark) VALUES (?, ?, ?, ?, ?)",
+        (server_id, hostname, filename, label or None, benchmark),
     )
     run_id = cur.lastrowid
     for row in rows:
@@ -818,11 +873,12 @@ def import_csv():
 
     if request.method == "GET":
         conn.close()
-        return render_template("import.html", clients_tree=clients_tree)
+        return render_template("import.html", clients_tree=clients_tree, benchmarks=BENCHMARKS, default_benchmark=DEFAULT_BENCHMARK)
 
     file = request.files.get("file")
     label = request.form.get("label", "").strip()
     server_id = request.form.get("server_id", type=int)
+    catalog_benchmark = benchmark_of(request.form.get("benchmark", DEFAULT_BENCHMARK))
 
     if not file or file.filename == "":
         flash("Elegi un archivo CSV.", "error")
@@ -839,24 +895,28 @@ def import_csv():
     kind = _sniff_csv_kind(reader.fieldnames)
     try:
         if kind == "catalog":
-            n = _import_catalog(conn, reader)
+            n = _import_catalog(conn, reader, catalog_benchmark)
             conn.commit()
-            flash(f"Catálogo importado: {n} controles.", "success")
+            flash(f"Catálogo {catalog_benchmark} importado: {n} controles.", "success")
         elif kind == "remediation_hints":
-            n = _import_remediation_hints(conn, reader)
+            n = _import_remediation_hints(conn, reader, catalog_benchmark)
             conn.commit()
-            flash(f"Guías de remediación importadas: {n} controles.", "success")
+            flash(f"Guías de remediación ({catalog_benchmark}) importadas: {n} controles.", "success")
         elif kind == "manual_remediation":
-            n = _import_manual_remediation(conn, reader)
+            n = _import_manual_remediation(conn, reader, catalog_benchmark)
             conn.commit()
-            flash(f"Procedimientos manuales importados: {n} controles.", "success")
+            flash(f"Procedimientos manuales ({catalog_benchmark}) importados: {n} controles.", "success")
         elif kind == "audit_run":
             if not server_id:
                 flash("Para importar una corrida de auditoría elegí a qué servidor pertenece.", "error")
                 return redirect(url_for("import_csv"))
-            run_id, n = _import_audit_run(conn, reader, file.filename, label, server_id)
+            server = conn.execute("SELECT benchmark FROM server WHERE id = ?", (server_id,)).fetchone()
+            if server is None:
+                flash("El servidor elegido no existe.", "error")
+                return redirect(url_for("import_csv"))
+            run_id, n = _import_audit_run(conn, reader, file.filename, label, server_id, server["benchmark"])
             conn.commit()
-            flash(f"Corrida importada: {n} resultados.", "success")
+            flash(f"Corrida importada ({server['benchmark']}): {n} resultados.", "success")
             return redirect(url_for("run_detail", run_id=run_id))
         else:
             flash(
@@ -879,12 +939,20 @@ def import_csv():
 def control_detail(control_id):
     conn = get_connection()
     server_id = request.values.get("server_id", type=int)
+    # Los control_id se repiten entre benchmarks: el benchmark sale del servidor (si hay)
+    # o del parametro ?benchmark=; por defecto WS2025 (compatibilidad con enlaces viejos).
+    benchmark = request.values.get("benchmark")
+    if server_id:
+        srv = conn.execute("SELECT benchmark FROM server WHERE id = ?", (server_id,)).fetchone()
+        if srv:
+            benchmark = srv["benchmark"]
+    benchmark = benchmark_of(benchmark)
 
     if request.method == "POST":
         if not server_id:
             flash("No se pudo guardar: falta elegir a qué servidor corresponde esta revisión.", "error")
             conn.close()
-            return redirect(url_for("control_detail", control_id=control_id))
+            return redirect(url_for("control_detail", control_id=control_id, benchmark=benchmark))
 
         decision = request.form.get("decision", "Pending")
         reviewer = request.form.get("reviewer", "").strip()
@@ -909,17 +977,17 @@ def control_detail(control_id):
         return redirect(url_for("control_detail", control_id=control_id, server_id=server_id))
 
     catalog = conn.execute(
-        "SELECT * FROM control_catalog WHERE control_id = ?", (control_id,)
+        "SELECT * FROM control_catalog WHERE control_id = ? AND benchmark = ?", (control_id, benchmark)
     ).fetchone()
     history = conn.execute(
         """
         SELECT cr.*, ar.hostname, ar.imported_at, ar.label, ar.server_id
         FROM control_result cr
         INNER JOIN audit_run ar ON ar.id = cr.run_id
-        WHERE cr.control_id = ?
+        WHERE cr.control_id = ? AND ar.benchmark = ?
         ORDER BY ar.imported_at DESC
         """,
-        (control_id,),
+        (control_id, benchmark),
     ).fetchall()
 
     review = None
@@ -942,8 +1010,10 @@ def control_detail(control_id):
         """
         SELECT s.*, c.name AS client_name
         FROM server s INNER JOIN client c ON c.id = s.client_id
+        WHERE s.benchmark = ?
         ORDER BY c.name, s.name
-        """
+        """,
+        (benchmark,),
     ).fetchall()
     conn.close()
 
@@ -954,6 +1024,8 @@ def control_detail(control_id):
     return render_template(
         "control_detail.html",
         control_id=control_id,
+        benchmark=benchmark,
+        benchmarks=BENCHMARKS,
         catalog=catalog,
         history=history,
         review=review,

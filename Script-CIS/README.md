@@ -10,6 +10,12 @@ Hoy trae dos benchmarks de contenido:
 - **CIS Microsoft Windows Server 2025 Benchmark v2.0.0** (`CISHarden.WS2025`),
   contra el checklist canónico de
   `Benchmarks/WS2025/CISHarden.WS2025/inventory/cis2025_controls_master.csv`.
+- **CIS Debian Linux 13 Benchmark v1.0.0** (`CISHarden.Debian13`) — **343 controles
+  (capítulos 1-7) implementados y testeados con Pester** (mockeando el sistema),
+  pendientes de validación en una Debian 13 real. Es el benchmark Linux más
+  completo del proyecto. Ver [`Benchmarks/Debian13/PLAN_Debian13.md`](Benchmarks/Debian13/PLAN_Debian13.md)
+  (decisiones, riesgos y desviaciones del benchmark control por control) y
+  `Benchmarks/Debian13/CISHarden.Debian13/inventory/cis_debian13_controls_master.csv`.
 - **CIS Debian Linux 10 Benchmark v2.0.0** (`CISHarden.Debian10`) — primer
   benchmark Unix/Linux del proyecto. Por ahora solo cubre el **Capítulo 1
   (Initial Setup, 67 controles)**; los capítulos 2-6 (~207 controles más)
@@ -95,6 +101,31 @@ módulo nuevo y se lo referencia por `-Benchmark`.
   requieren privilegios elevados.
 - Por ahora solo cubre el Capítulo 1 del benchmark (67 de ~274 controles) —
   ver "Estado actual" mas abajo.
+
+### Para CISHarden.Debian13 (Linux)
+
+Igual que Debian10 (Debian 13 real, `pwsh` 7+, root), más los binarios que usan
+sus controles: `sshd`, `ufw`, `auditd`/`auditctl`, `chage`, `usermod`, `apt`,
+`systemctl`, `findmnt`, `sysctl`, `dconf`/`pam-auth-update` (según qué esté
+instalado; sin un componente instalado su control da `NotApplicable`/`Pass` o
+`Fail` según lo defina el benchmark). Sin sistema Debian los `Test-*` devuelven
+`Error` por binarios ausentes (esperado) — la lógica se valida con Pester.
+
+**Antes de remediar (`Invoke-CISRemediate -Benchmark Debian13`) leé los riesgos
+del `PLAN_Debian13.md`**: SSH (5.1), UFW (4.1), PAM (5.3), sudoers (5.2),
+forwarding de red (3.3), `disk_full_action` de auditd (6.2.2.3) y `-e 2` (6.2.3.36)
+pueden dejar el host sin acceso o inmutable. Los `Set-*` peligrosos exigen un
+switch explícito (`-AllowSsh`, `-AcceptOutboundBlock`, `-RemoveNoPasswd`,
+`-AcceptImmutable`, `-Purge`, ...) y validan/revierten (`sshd -t`, `visudo -cf`,
+restauración de `/etc/pam.d/common-*`). Probar siempre con `-WhatIf` y con una
+**segunda sesión abierta**.
+
+```powershell
+Import-Module ./CISHarden.Core/CISHarden.Core.psd1 -Force
+Import-Module ./Benchmarks/Debian13/CISHarden.Debian13/CISHarden.Debian13.psd1 -Force
+Invoke-CISAudit -Benchmark Debian13 -ReportCoverage -OutputPath ./audit_debian13.csv
+Invoke-CISRemediate -Benchmark Debian13 -Chapter 1 -WhatIf
+```
 
 ### Para ambos
 
@@ -383,6 +414,13 @@ Lo que falta para cerrar la Etapa 8 (consolidación final, ver `PLAN.md`):
 un reporte HTML (hoy el orquestador ya exporta CSV); y el ciclo completo de
 remediación (`Set-CIS_WS2025_*` → re-audit → restaurar backup) probado en
 una muestra de controles por capítulo antes de marcar `status_validated`.
+
+**CIS Debian13: los 343 controles del benchmark (`status_impl=OK`,
+`status_tested=OK` con Pester 5.6.1 — `status_validated` vacío hasta correrlo en
+una Debian 13 real).** El inventario se verificó contra una segunda fuente (la
+tabla del Appendix del benchmark: 343 = 343 controles). Detalle por etapa,
+motores nuevos de Core (sysctl, systemd, dconf, sshd, PAM/sudoers en el módulo)
+y desviaciones justificadas en `Benchmarks/Debian13/PLAN_Debian13.md`.
 
 **CIS Debian10 arrancó con el Capítulo 1 (Initial Setup) como piloto: 67/67
 controles tienen `Test-CIS_Debian10_*`/`Set-CIS_Debian10_*` implementados**,

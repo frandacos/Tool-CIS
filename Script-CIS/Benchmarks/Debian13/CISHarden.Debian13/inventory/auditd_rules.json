@@ -1,0 +1,288 @@
+{
+ "_comment": "Reglas de auditd de CIS Debian 13 v1.0.0 (6.2.3.x), extraidas de la seccion Remediation de cada control. {ARCH}=b64 (b32 en sistemas de 32 bits) y {UID_MIN}=UID_MIN de /etc/login.defs. 6.2.3.10 (comandos privilegiados), 6.2.3.35/.36 (-c / -e 2) y 6.2.3.37 (Manual) se tratan en codigo.",
+ "controls": {
+  "6.2.3.1": [
+   {
+    "file": "50-scope.rules",
+    "rules": [
+     "-a always,exit -F arch={ARCH} -S all -F path=/etc/sudoers -F perm=wa -k scope",
+     "-a always,exit -F arch={ARCH} -S all -F dir=/etc/sudoers.d -F perm=wa -k scope"
+    ]
+   }
+  ],
+  "6.2.3.2": [
+   {
+    "file": "50-user_emulation.rules",
+    "rules": [
+     "-a always,exit -F arch={ARCH} -C euid!=uid -F auid!=unset -S execve -k user_emulation"
+    ]
+   }
+  ],
+  "6.2.3.3": [
+   {
+    "file": "50-sudo.rules",
+    "rules": [
+     "-a always,exit -F arch={ARCH} -S all -F path=/var/log/sudo.log -F perm=wa -k sudo_log_file"
+    ]
+   }
+  ],
+  "6.2.3.4": [
+   {
+    "file": "50-time-change.rules",
+    "rules": [
+     "-a always,exit -F arch={ARCH} -S adjtimex,settimeofday -k time-change",
+     "-a always,exit -F arch={ARCH} -S clock_settime -F a0=0x0 -k time-change"
+    ]
+   },
+   {
+    "file": "50-local-time-change.rules",
+    "rules": [
+     "-a always,exit -F arch={ARCH} -S all -F path=/etc/localtime -F perm=wa -k localtime-change"
+    ]
+   }
+  ],
+  "6.2.3.5": [
+   {
+    "file": "50-system_locale.rules",
+    "rules": [
+     "-a always,exit -F arch={ARCH} -S sethostname,setdomainname -k system-locale"
+    ]
+   }
+  ],
+  "6.2.3.6": [
+   {
+    "file": "50-etc_issue_system_locale.rules",
+    "rules": [
+     "-a always,exit -F arch={ARCH} -S all -F path=/etc/issue -F perm=wa -k system-locale",
+     "-a always,exit -F arch={ARCH} -S all -F path=/etc/issue.net -F perm=wa -k system-locale"
+    ]
+   }
+  ],
+  "6.2.3.7": [
+   {
+    "file": "50-etc_host_system_locale.rules",
+    "rules": [
+     "-a always,exit -F arch={ARCH} -S all -F path=/etc/hosts -F perm=wa -k system-locale",
+     "-a always,exit -F arch={ARCH} -S all -F path=/etc/hostname -F perm=wa -k system-locale"
+    ]
+   }
+  ],
+  "6.2.3.8": [
+   {
+    "file": "50-etc_sysconfig_system_locale.rules",
+    "rules": [
+     "-a always,exit -F arch={ARCH} -S all -F path=/etc/network/interfaces -F perm=wa -k system-locale",
+     "-a always,exit -F arch={ARCH} -S all -F dir=/etc/network/interfaces.d -F perm=wa -k system-locale",
+     "-a always,exit -F arch={ARCH} -S all -F dir=/etc/netplan/ -F perm=wa -k system-locale"
+    ]
+   }
+  ],
+  "6.2.3.9": [
+   {
+    "file": "50-etc_NetworkManager_system_locale.rules",
+    "rules": [
+     "-a always,exit -F arch={ARCH} -S all -F dir=/etc/NetworkManager/ -F perm=wa -k system-locale"
+    ]
+   }
+  ],
+  "6.2.3.11": [
+   {
+    "file": "50-access.rules",
+    "rules": [
+     "-a always,exit -F arch={ARCH} -S creat,open,openat,truncate,ftruncate -F exit=-EACCES -F auid>={UID_MIN} -F auid!=unset -k access",
+     "-a always,exit -F arch={ARCH} -S creat,open,openat,truncate,ftruncate -F exit=-EPERM -F auid>={UID_MIN} -F auid!=unset -k access"
+    ]
+   }
+  ],
+  "6.2.3.12": [
+   {
+    "file": "50-identity.rules",
+    "rules": [
+     "-a always,exit -F arch={ARCH} -S all -F path=/etc/group -F perm=wa -k identity"
+    ]
+   }
+  ],
+  "6.2.3.13": [
+   {
+    "file": "50-identity.rules",
+    "rules": [
+     "-a always,exit -F arch={ARCH} -S all -F path=/etc/passwd -F perm=wa -k identity"
+    ]
+   }
+  ],
+  "6.2.3.14": [
+   {
+    "file": "50-identity.rules",
+    "rules": [
+     "-a always,exit -F arch={ARCH} -S all -F path=/etc/gshadow -F perm=wa -k identity",
+     "-a always,exit -F arch={ARCH} -S all -F path=/etc/shadow -F perm=wa -k identity"
+    ]
+   }
+  ],
+  "6.2.3.15": [
+   {
+    "file": "50-identity.rules",
+    "rules": [
+     "-a always,exit -F arch={ARCH} -S all -F path=/etc/security/opasswd -F perm=wa -k identity"
+    ]
+   }
+  ],
+  "6.2.3.16": [
+   {
+    "file": "50-identity.rules",
+    "rules": [
+     "-a always,exit -F arch={ARCH} -S all -F path=/etc/nsswitch.conf -F perm=wa -k identity"
+    ]
+   }
+  ],
+  "6.2.3.17": [
+   {
+    "file": "50-identity.rules",
+    "rules": [
+     "-a always,exit -F arch={ARCH} -S all -F path=/etc/pam.conf -F perm=wa -k identity",
+     "-a always,exit -F arch={ARCH} -S all -F dir=/etc/pam.d -F perm=wa -k identity"
+    ]
+   }
+  ],
+  "6.2.3.18": [
+   {
+    "file": "50-perm_mod.rules",
+    "rules": [
+     "-a always,exit -F arch={ARCH} -S chmod,fchmod,fchmodat,fchmodat2 -F auid>={UID_MIN} -F auid!=unset -k perm_mod"
+    ]
+   }
+  ],
+  "6.2.3.19": [
+   {
+    "file": "50-perm_mod.rules",
+    "rules": [
+     "-a always,exit -F arch={ARCH} -S chown,fchown,lchown,fchownat -F auid>={UID_MIN} -F auid!=unset -k perm_mod"
+    ]
+   }
+  ],
+  "6.2.3.20": [
+   {
+    "file": "50-perm_mod.rules",
+    "rules": [
+     "-a always,exit -F arch={ARCH} -S setxattr,lsetxattr,fsetxattr,removexattr,lremovexattr,fremovexattr -F auid>={UID_MIN} -F auid!=unset -k perm_mod"
+    ]
+   }
+  ],
+  "6.2.3.21": [
+   {
+    "file": "50-mounts.rules",
+    "rules": [
+     "-a always,exit -F arch={ARCH} -S mount -F auid>={UID_MIN} -F auid!=unset -k mounts"
+    ]
+   }
+  ],
+  "6.2.3.22": [
+   {
+    "file": "50-session.rules",
+    "rules": [
+     "-a always,exit -F arch={ARCH} -S all -F path=/var/run/utmp -F perm=wa -k session",
+     "-a always,exit -F arch={ARCH} -S all -F path=/var/log/wtmp -F perm=wa -k session",
+     "-a always,exit -F arch={ARCH} -S all -F path=/var/log/btmp -F perm=wa -k session"
+    ]
+   }
+  ],
+  "6.2.3.23": [
+   {
+    "file": "50-login.rules",
+    "rules": [
+     "-a always,exit -F arch={ARCH} -S all -F path=/var/log/lastlog -F perm=wa -k logins",
+     "-a always,exit -F arch={ARCH} -S all -F path=/var/run/faillock -F perm=wa -k logins"
+    ]
+   }
+  ],
+  "6.2.3.24": [
+   {
+    "file": "50-delete.rules",
+    "rules": [
+     "-a always,exit -F arch={ARCH} -S unlink,unlinkat -F auid>={UID_MIN} -F auid!=unset -k delete"
+    ]
+   }
+  ],
+  "6.2.3.25": [
+   {
+    "file": "50-delete.rules",
+    "rules": [
+     "-a always,exit -F arch={ARCH} -S rename,renameat,renameat2 -F auid>={UID_MIN} -F auid!=unset -k delete"
+    ]
+   }
+  ],
+  "6.2.3.26": [
+   {
+    "file": "50-MAC-policy.rules",
+    "rules": [
+     "-a always,exit -F arch={ARCH} -S all -F path=/etc/apparmor -F perm=wa -k MAC-policy",
+     "-a always,exit -F arch={ARCH} -S all -F dir=/etc/apparmor.d -F perm=wa -k MAC-policy"
+    ]
+   }
+  ],
+  "6.2.3.27": [
+   {
+    "file": "50-perm_chng.rules",
+    "rules": [
+     "-a always,exit -F arch={ARCH} -S all -F path=/usr/bin/chcon -F perm=x -F auid>={UID_MIN} -F auid!=unset -k perm_chng"
+    ]
+   }
+  ],
+  "6.2.3.28": [
+   {
+    "file": "50-perm_chng.rules",
+    "rules": [
+     "-a always,exit -F arch={ARCH} -S all -F path=/usr/bin/setfacl -F perm=x -F auid>={UID_MIN} -F auid!=unset -k perm_chng"
+    ]
+   }
+  ],
+  "6.2.3.29": [
+   {
+    "file": "50-perm_chng.rules",
+    "rules": [
+     "-a always,exit -F arch={ARCH} -S all -F path=/usr/bin/chacl -F perm=x -F auid>={UID_MIN} -F auid!=unset -k perm_chng"
+    ]
+   }
+  ],
+  "6.2.3.30": [
+   {
+    "file": "50-usermod.rules",
+    "rules": [
+     "-a always,exit -F arch={ARCH} -S all -F path=/usr/sbin/usermod -F perm=x -F auid>={UID_MIN} -F auid!=unset -k usermod"
+    ]
+   }
+  ],
+  "6.2.3.31": [
+   {
+    "file": "50-kernel_modules.rules",
+    "rules": [
+     "-a always,exit -F arch={ARCH} -S all -F path=/usr/bin/kmod -F perm=x -F auid>={UID_MIN} -F auid!=unset -k kernel_modules"
+    ]
+   }
+  ],
+  "6.2.3.32": [
+   {
+    "file": "50-kernel_modules.rules",
+    "rules": [
+     "-a always,exit -F arch={ARCH} -S init_module,finit_module -F auid>={UID_MIN} -F auid!=unset -k kernel_modules"
+    ]
+   }
+  ],
+  "6.2.3.33": [
+   {
+    "file": "50-kernel_modules.rules",
+    "rules": [
+     "-a always,exit -F arch={ARCH} -S delete_module -F auid>={UID_MIN} -F auid!=unset -k kernel_modules"
+    ]
+   }
+  ],
+  "6.2.3.34": [
+   {
+    "file": "50-kernel_modules.rules",
+    "rules": [
+     "-a always,exit -F arch={ARCH} -S query_module -F auid>={UID_MIN} -F auid!=unset -k kernel_modules"
+    ]
+   }
+  ]
+ }
+}

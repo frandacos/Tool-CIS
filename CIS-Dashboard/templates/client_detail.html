@@ -47,6 +47,7 @@
       <tr>
         <td>
           <a style="font-weight: 600; font-size: 0.95rem;" href="{{ url_for('server_detail', server_id=s.id) }}">{{ s.name }}</a>
+          <div class="text-muted small">{{ benchmarks[s.benchmark].name if s.benchmark in benchmarks else s.benchmark }}</div>
         </td>
         <td><span class="mono">{{ s.hostname or "—" }}</span></td>
         <td>
@@ -67,7 +68,7 @@
             <a class="btn btn-ghost btn-xs" href="{{ url_for('server_detail', server_id=s.id) }}">Hardening</a>
             <button type="button" class="btn btn-ghost btn-xs btn-edit-server"
               data-id="{{ s.id }}" data-name="{{ s.name }}" data-hostname="{{ s.hostname or '' }}"
-              data-criticality="{{ s.criticality }}" data-description="{{ s.description or '' }}">Editar</button>
+              data-criticality="{{ s.criticality }}" data-description="{{ s.description or '' }}" data-benchmark="{{ s.benchmark }}">Editar</button>
             <form method="post" action="{{ url_for('delete_server', server_id=s.id) }}" onsubmit="return confirm('¿Seguro que querés eliminar el servidor {{ s.name }}?');" style="display: inline;">
               <button type="submit" class="btn btn-danger btn-xs">Eliminar</button>
             </form>
@@ -105,6 +106,15 @@
         <label for="hostname">Hostname técnico (opcional)</label>
         <input type="text" name="hostname" id="hostname" placeholder="ej. DC01.corp.internal" data-pattern="hostname">
         <div class="field-error"></div>
+      </div>
+
+      <div class="form-group">
+        <label for="benchmark">Benchmark CIS a auditar</label>
+        <select name="benchmark" id="benchmark" class="form-select">
+          {% for key, b in benchmarks.items() %}
+            <option value="{{ key }}" {% if key == "WS2025" %}selected{% endif %}>{{ b.name }}</option>
+          {% endfor %}
+        </select>
       </div>
 
       <div class="form-group">
@@ -147,6 +157,15 @@
         <label for="edit-server-hostname">Hostname técnico (opcional)</label>
         <input type="text" name="hostname" id="edit-server-hostname" data-pattern="hostname">
         <div class="field-error"></div>
+      </div>
+
+      <div class="form-group">
+        <label for="edit-server-benchmark">Benchmark CIS a auditar</label>
+        <select name="benchmark" id="edit-server-benchmark" class="form-select">
+          {% for key, b in benchmarks.items() %}
+            <option value="{{ key }}">{{ b.name }}</option>
+          {% endfor %}
+        </select>
       </div>
 
       <div class="form-group">
@@ -226,6 +245,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const editServerName = document.getElementById('edit-server-name');
   const editServerHostname = document.getElementById('edit-server-hostname');
   const editServerCriticality = document.getElementById('edit-server-criticality');
+  const editServerBenchmark = document.getElementById('edit-server-benchmark');
   const editServerDesc = document.getElementById('edit-server-description');
   const editServerClose = document.getElementById('edit-server-modal-close');
   const editServerCancel = document.getElementById('edit-server-modal-cancel');
@@ -237,11 +257,13 @@ document.addEventListener('DOMContentLoaded', () => {
       const hostname = btn.getAttribute('data-hostname');
       const criticality = btn.getAttribute('data-criticality');
       const desc = btn.getAttribute('data-description');
+      const benchmark = btn.getAttribute('data-benchmark');
 
       editServerForm.action = `/servers/${serverId}/edit`;
       editServerName.value = name;
       editServerHostname.value = hostname;
       editServerCriticality.value = criticality;
+      if (benchmark) { editServerBenchmark.value = benchmark; }
       editServerDesc.value = desc;
 
       editServerOverlay.hidden = false;

@@ -26,7 +26,7 @@
         'Get-CISFileMode', 'Set-CISFileMode', 'Get-CISFileOwner', 'Set-CISFileOwner',
         'Test-CISPackageInstalled', 'Install-CISPackage', 'Remove-CISPackage',
         'Test-CISServiceEnabled', 'Test-CISServiceActive', 'Enable-CISService', 'Disable-CISService', 'Set-CISServiceMasked',
-        'Get-CISSysctlValue', 'Set-CISSysctlValue'
+        'Get-CISSysctlValue', 'Set-CISSysctlValue', 'Get-CISSysctlConfigFiles', 'Get-CISSysctlPersistedValue', 'Test-CISSysctlSetting', 'Set-CISSysctlEnforced', 'Test-CISPathAccess', 'Get-CISSystemdConfigValue', 'Set-CISSystemdConfigValue', 'Get-CISDconfKeyFiles', 'Get-CISDconfValue', 'Test-CISDconfPathLocked', 'Set-CISDconfKeyFile', 'Set-CISDconfLock', 'Get-CISSshdPath', 'ConvertFrom-CISSshdOutput', 'Get-CISSshdConfig', 'Get-CISSshdVersion', 'Set-CISSshdOption', 'Invoke-CISSshdReload'
     )
     PrivateData       = @{
         PSData = @{
