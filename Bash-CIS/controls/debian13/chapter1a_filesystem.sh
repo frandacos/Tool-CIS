@@ -89,7 +89,7 @@ test_1_1_2_1_1() {
     local state
     state="$(systemctl is-enabled tmp.mount 2>/dev/null | head -n1)"
     if [[ "$mounted" -eq 0 && "$state" != "masked" && "$state" != "disabled" ]]; then
-        cis_result 1.1.2.1.1 "$title" Pass "$mp es un punto de montaje propio; tmp.mount habilitado" "montado; tmp.mount=${state}"
+        cis_result 1.1.2.1.1 "$title" Pass "/tmp es un punto de montaje propio; tmp.mount habilitado" "montado; tmp.mount=${state}"
     else
         cis_result 1.1.2.1.1 "$title" Fail "/tmp es un punto de montaje propio; tmp.mount habilitado" \
             "montado=$([[ $mounted -eq 0 ]] && echo si || echo no); tmp.mount=${state}"
